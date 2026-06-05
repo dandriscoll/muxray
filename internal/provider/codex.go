@@ -7,13 +7,20 @@ package provider
 func codexAdapter() adapter {
 	return adapter{
 		name: "codex",
-		signature: func(text, lower string) bool {
-			return containsAny(lower, "codex", "openai codex")
+		signature: func(text, lower string) int {
+			if containsAny(lower, "openai codex", "codex") {
+				return 2
+			}
+			return 0
 		},
 		rules: []Rule{
 			phraseRule("codex.error", StatusError, 0.8,
 				"error:", "failed to", "stream error", "rate limit",
 				"request failed", "exception:",
+			),
+			phraseRule("codex.blocked", StatusBlocked, 0.8,
+				"blocked on", "blocked by", "cannot continue until",
+				"merge conflict", "sandbox denied",
 			),
 			phraseRule("codex.needs_approval", StatusNeedsApproval, 0.9,
 				"allow command", "run command?", "do you want to run",

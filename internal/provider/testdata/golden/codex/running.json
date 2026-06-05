@@ -1,0 +1,5 @@
+{
+  "provider": "codex",
+  "status": "running",
+  "rule_id": "codex.running"
+}

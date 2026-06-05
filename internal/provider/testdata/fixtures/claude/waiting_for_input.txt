@@ -1,0 +1,5 @@
+  Claude needs a bit more detail before continuing.
+
+  Which environment should I deploy to? (y/n)
+
+  ? for shortcuts

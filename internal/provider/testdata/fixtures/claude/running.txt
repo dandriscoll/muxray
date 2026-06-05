@@ -1,0 +1,4 @@
+[2m╭────────────────────────────────────────────────╮[0m
+[2m│[0m > Refactor the auth module                       [2m│[0m
+[2m╰────────────────────────────────────────────────╯[0m
+  [2m⠋ Cogitating…[0m  [33m⠹ Cogitating… (12s · ↑ 1.2k tokens · esc to interrupt)[0m

@@ -1,0 +1,3 @@
+codex
+  stream error: rate limit exceeded (429)
+  failed to complete the request

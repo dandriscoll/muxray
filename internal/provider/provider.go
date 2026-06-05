@@ -36,9 +36,15 @@ type Rule struct {
 }
 
 // adapter recognizes one harness and classifies its output.
+//
+// signature returns a strength: 0 (no match), 1 (a weak/generic UI hint that
+// could belong to several harnesses, e.g. "esc to interrupt"), or 2 (a
+// distinctive brand match, e.g. "OpenAI Codex"). The provider with the strongest
+// signature wins, so a shared UI phrase never lets one harness steal another's
+// branded pane.
 type adapter struct {
 	name      string
-	signature func(text, lower string) bool
+	signature func(text, lower string) int
 	rules     []Rule
 }
 
@@ -73,62 +79,72 @@ const tailLines = 60
 func Detect(clean string, explain bool) Result {
 	text := lastLines(clean, tailLines)
 	lower := strings.ToLower(text)
-
-	best := Result{Provider: "unknown", Status: StatusUnknown, MatchSource: "no_provider_signature", Confidence: 0}
 	var trace []TraceEntry
 
-	for _, a := range adapters {
-		sig := a.signature(text, lower)
+	// Step 1: choose the provider with the strongest signature. Brand matches
+	// (strength 2) always beat generic UI hints (strength 1); ties fall to
+	// adapter order.
+	chosen := -1
+	bestSig := 0
+	for i, a := range adapters {
+		s := a.signature(text, lower)
 		if explain {
-			trace = append(trace, TraceEntry{Provider: a.name, RuleID: "signature", Matched: sig})
+			trace = append(trace, TraceEntry{Provider: a.name, RuleID: "signature", Matched: s > 0, Evidence: sigName(s)})
 		}
-		if !sig {
-			continue
+		if s > bestSig {
+			bestSig = s
+			chosen = i
 		}
-		fired := false
-		for _, rule := range a.rules {
-			ok, ev := rule.match(text, lower)
-			if explain {
-				trace = append(trace, TraceEntry{Provider: a.name, RuleID: rule.ID, Status: rule.Status, Matched: ok, Evidence: ev})
-			}
-			if ok && !fired {
-				cand := Result{
-					Provider:    a.name,
-					Status:      rule.Status,
-					RuleID:      rule.ID,
-					MatchSource: "rule:" + rule.ID,
-					Confidence:  rule.Confidence,
-					Evidence:    ev,
-				}
-				if cand.Confidence > best.Confidence {
-					best = cand
-				}
-				fired = true
-				if !explain {
-					break
-				}
-			}
+	}
+	if chosen < 0 {
+		res := Result{Provider: "unknown", Status: StatusUnknown, MatchSource: "no_provider_signature", Confidence: 0}
+		if explain {
+			res.Trace = trace
 		}
-		if !fired {
-			// Provider recognized but no status rule fired: the harness is
-			// present but in a state our rules don't name. Report the provider
-			// with an unknown status at low confidence rather than guessing.
-			cand := Result{
+		return res
+	}
+
+	// Step 2: classify with the chosen provider's ordered rules; first match
+	// wins. A recognized provider with no matching rule reports its name with an
+	// unknown status (signature_only) rather than guessing a state.
+	a := adapters[chosen]
+	best := Result{Provider: a.name, Status: StatusUnknown, MatchSource: "signature_only", Confidence: 0.3}
+	fired := false
+	for _, rule := range a.rules {
+		ok, ev := rule.match(text, lower)
+		if explain {
+			trace = append(trace, TraceEntry{Provider: a.name, RuleID: rule.ID, Status: rule.Status, Matched: ok, Evidence: ev})
+		}
+		if ok && !fired {
+			best = Result{
 				Provider:    a.name,
-				Status:      StatusUnknown,
-				MatchSource: "signature_only",
-				Confidence:  0.3,
+				Status:      rule.Status,
+				RuleID:      rule.ID,
+				MatchSource: "rule:" + rule.ID,
+				Confidence:  rule.Confidence,
+				Evidence:    ev,
 			}
-			if cand.Confidence > best.Confidence {
-				best = cand
+			fired = true
+			if !explain {
+				break
 			}
 		}
 	}
-
 	if explain {
 		best.Trace = trace
 	}
 	return best
+}
+
+func sigName(strength int) string {
+	switch strength {
+	case 2:
+		return "brand"
+	case 1:
+		return "weak_hint"
+	default:
+		return ""
+	}
 }
 
 // Providers returns the registered provider names (deterministic order).

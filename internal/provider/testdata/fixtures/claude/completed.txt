@@ -1,0 +1,7 @@
+  ⏺ Done! Refactored the auth module and updated the tests.
+  Completed in 1m 24s.
+
+╭──────────────────────────────────────────────╮
+│ >                                              │
+╰──────────────────────────────────────────────╯
+  ? for shortcuts

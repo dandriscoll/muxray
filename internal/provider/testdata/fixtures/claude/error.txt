@@ -1,0 +1,8 @@
+  ⎿ API Error: 500 Internal Server Error (request id req_abc123)
+
+  The request failed. Retrying may help.
+
+╭──────────────────────────────────────────────╮
+│ >                                              │
+╰──────────────────────────────────────────────╯
+  ? for shortcuts

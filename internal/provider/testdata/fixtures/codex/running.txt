@@ -1,0 +1,3 @@
+OpenAI Codex
+[36m  • Working[0m[36m  • Working (esc to interrupt)[0m
+  Running command: go build ./...

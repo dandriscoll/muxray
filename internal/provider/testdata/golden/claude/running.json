@@ -1,0 +1,5 @@
+{
+  "provider": "claude",
+  "status": "running",
+  "rule_id": "claude.running"
+}

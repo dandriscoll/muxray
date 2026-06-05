@@ -1,0 +1,6 @@
+codex
+  Allow command?
+
+    $ npm install
+
+  [y/n]

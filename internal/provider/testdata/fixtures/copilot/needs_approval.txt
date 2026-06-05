@@ -1,0 +1,6 @@
+GitHub Copilot
+  Allow Copilot to run this command?
+
+    git push origin main
+
+  [Y/n]

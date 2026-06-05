@@ -7,12 +7,19 @@ package provider
 func copilotAdapter() adapter {
 	return adapter{
 		name: "copilot",
-		signature: func(text, lower string) bool {
-			return containsAny(lower, "copilot", "github copilot")
+		signature: func(text, lower string) int {
+			if containsAny(lower, "github copilot", "copilot") {
+				return 2
+			}
+			return 0
 		},
 		rules: []Rule{
 			phraseRule("copilot.error", StatusError, 0.8,
 				"error:", "failed", "could not", "request failed",
+			),
+			phraseRule("copilot.blocked", StatusBlocked, 0.8,
+				"blocked on", "blocked by", "cannot continue until",
+				"merge conflict",
 			),
 			phraseRule("copilot.needs_approval", StatusNeedsApproval, 0.9,
 				"allow copilot to run", "run this command?",

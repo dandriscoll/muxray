@@ -1,0 +1,5 @@
+{
+  "provider": "claude",
+  "status": "completed",
+  "rule_id": "claude.completed"
+}

@@ -1,0 +1,3 @@
+GitHub Copilot
+  error: could not reach the Copilot service
+  Request failed.

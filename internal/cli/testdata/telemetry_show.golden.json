@@ -1,0 +1,28 @@
+{
+  "command": "telemetry.show",
+  "example_event": {
+    "ansi_normalized": true,
+    "arch": "amd64",
+    "char_count": 1337,
+    "command": "status",
+    "confidence": 0.9,
+    "content_fingerprint": "0123456789abcdef",
+    "duration_ms": 12,
+    "invocation_id": "example",
+    "line_count": 42,
+    "muxray_version": "dev",
+    "os": "linux",
+    "provider": "claude",
+    "rule_id": "claude.running",
+    "status": "running",
+    "success": true,
+    "truncated": false
+  },
+  "external_enabled": false,
+  "generated_at": "\u003cnormalized\u003e",
+  "kill_switch_active": false,
+  "muxray_version": "\u003cnormalized\u003e",
+  "network_sink": false,
+  "note": "This version has NO network telemetry sink. Events are content-free by construction (only counts, classes, booleans, and hashes — never pane text, prompts, secrets, or environment). Local diagnostic logging is written only under --debug. Disable everything with MUXRAY_NO_TELEMETRY=1 or DO_NOT_TRACK=1.",
+  "schema_version": "1"
+}

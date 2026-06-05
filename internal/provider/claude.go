@@ -10,17 +10,27 @@ package provider
 func claudeAdapter() adapter {
 	return adapter{
 		name: "claude",
-		signature: func(text, lower string) bool {
-			return containsAny(lower,
-				"claude", "anthropic",
-				"esc to interrupt", "? for shortcuts",
-			)
+		signature: func(text, lower string) int {
+			// Brand or Claude-distinctive whimsical spinner words.
+			if containsAny(lower, "claude", "anthropic",
+				"cogitating", "pondering", "herding", "ruminating", "schlepping", "noodling") {
+				return 2
+			}
+			// Generic UI hints shared with other harnesses (weak).
+			if containsAny(lower, "esc to interrupt", "? for shortcuts") {
+				return 1
+			}
+			return 0
 		},
 		rules: []Rule{
 			// Order matters: most urgent / most specific first.
 			phraseRule("claude.error", StatusError, 0.85,
 				"api error", "execution error", "request failed",
 				"overloaded", "error:", "fatal:",
+			),
+			phraseRule("claude.blocked", StatusBlocked, 0.8,
+				"blocked on", "blocked by", "cannot continue until",
+				"waiting on lock", "merge conflict",
 			),
 			phraseRule("claude.needs_approval", StatusNeedsApproval, 0.9,
 				"do you want to proceed", "do you want to make this edit",

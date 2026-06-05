@@ -228,7 +228,11 @@ func cmdDiff(args []string) int {
 		return emitError(wantJSON, "diff", derr)
 	}
 	if *save {
-		_, _ = snapshot.Save(cur, "")
+		// --save is a convenience; a store failure must not fail the diff, but it
+		// is surfaced (not silently swallowed) as a non-fatal note on stderr.
+		if _, err := snapshot.Save(cur, ""); err != nil {
+			fmt.Fprintf(stderr, "muxray: warning: --save failed: %v\n", err)
+		}
 	}
 
 	res := diff.Compute(prev.ID, cur.ID, prev.Clean, cur.Clean, diff.Options{

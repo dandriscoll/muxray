@@ -60,6 +60,24 @@ pattern-match a moving terminal UI on every poll. `muxray` does that once,
 deterministically, behind a stable JSON contract — so the agent can poll
 `muxray status` / `muxray diff` in a loop and trust the answer.
 
+### Use it with your orchestrator
+
+One agent in one pane is the easy case. The payoff grows when an **orchestration
+framework** supervises *many* long-running agent sessions at once and has to answer
+"what is each one doing right now?" on every tick. Frameworks like
+[OpenClaw](https://github.com/openclaw/openclaw) and other multi-agent orchestrators
+are a natural fit: wherever your orchestrator drives an interactive agent in a tmux
+pane, its control loop can poll `muxray status` / `muxray diff` per pane and branch on
+deterministic `{program, status}` JSON instead of scraping each session's raw bytes.
+
+It also shares their grain: orchestrators like OpenClaw are **local-first** and run on
+your own machine for privacy, and so is `muxray` — pane output (which can hold secrets)
+is read locally and **never leaves the box** (no network egress; see Telemetry below).
+
+> muxray doesn't ship an orchestrator plug-in — it's a small CLI with a stable JSON
+> contract, so wiring it into a control loop is a few lines wherever you already manage
+> tmux panes.
+
 ---
 
 ## Install

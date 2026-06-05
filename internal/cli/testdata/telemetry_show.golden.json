@@ -16,6 +16,7 @@
     "rule_id": "claude.running",
     "status": "running",
     "success": true,
+    "tmux_version": "3.4",
     "truncated": false
   },
   "external_enabled": false,

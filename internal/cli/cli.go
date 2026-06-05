@@ -92,8 +92,9 @@ func (c *commonFlags) register(fs *flag.FlagSet, withExplain bool) {
 	}
 }
 
-// wantJSON resolves the json/text flags (text wins when set).
-func (c *commonFlags) wantJSON() bool { return !c.text }
+// wantJSON resolves the json/text flags. JSON is the default; --text opts out,
+// and --json=false is honored consistently with the other commands.
+func (c *commonFlags) wantJSON() bool { return c.jsonOut && !c.text }
 
 // cmdError is a structured, user-facing command failure.
 type cmdError struct {

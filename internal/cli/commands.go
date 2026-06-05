@@ -50,10 +50,8 @@ type listResponse struct {
 func cmdList(args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var c commonFlags
 	jsonOut := fs.Bool("json", true, "emit JSON (default)")
 	text := fs.Bool("text", false, "emit a terse human summary instead")
-	_ = c
 	if err := fs.Parse(args); err != nil {
 		return flagError("list", true, err)
 	}
@@ -467,8 +465,10 @@ func cmdTelemetry(args []string) int {
 
 	switch sub {
 	case "show":
+		// Illustrative, host-independent example of the event shape. Host fields
+		// are fixed sample values so the shape is stable across platforms.
 		example := telemetry.Event{
-			MuxrayVersion: version.Version, OS: goos(), Arch: goarch(),
+			MuxrayVersion: version.Version, OS: "linux", Arch: "amd64", TmuxVersion: "3.4",
 			Command: "status", DurationMS: 12, Success: true,
 			Provider: "claude", Status: "running", RuleID: "claude.running", Confidence: 0.9,
 			ANSINormalized: true, LineCount: 42, CharCount: 1337, Truncated: false,

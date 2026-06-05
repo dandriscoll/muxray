@@ -21,6 +21,37 @@ terminal bytes itself.
 
 ---
 
+## At a glance
+
+Without `muxray`, your poll loop scrapes raw, ANSI-laden terminal bytes and guesses
+what they mean:
+
+```text
+OpenAI Codex
+  Working (esc to interrupt)
+  Running command: go test ./...
+```
+
+With `muxray`, the same pane becomes one deterministic line your loop can branch on:
+
+```sh
+$ muxray status --pane work:1.0
+```
+
+```json
+{ "classification": { "provider": "codex", "status": "running", "evidence": "Working (esc to interrupt)" } }
+```
+
+*(Trimmed — the [full self-describing output](#example-output) also carries the
+schema version, a confidence score, and the matched rule, with `--explain` for the
+complete parser trace.)*
+
+**Is this for you?** If you drive Claude/Codex/Copilot — or any TUI — inside tmux
+from your own loop and need to know *what changed* and *what the agent is doing*,
+yes. If you just want to read your own terminal by hand, you probably don't need it.
+
+---
+
 ## Why an agent needs this
 
 An agent orchestrating a Claude/Codex/Copilot session inside tmux otherwise has

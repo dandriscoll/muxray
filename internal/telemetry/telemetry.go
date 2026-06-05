@@ -37,7 +37,7 @@ type Event struct {
 	DurationMS         int64   `json:"duration_ms"`
 	Success            bool    `json:"success"`
 	ErrorClass         string  `json:"error_class,omitempty"`
-	Provider           string  `json:"provider,omitempty"`
+	Program            string  `json:"program,omitempty"`
 	Status             string  `json:"status,omitempty"`
 	RuleID             string  `json:"rule_id,omitempty"`
 	Confidence         float64 `json:"confidence,omitempty"`

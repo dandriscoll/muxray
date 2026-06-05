@@ -18,25 +18,25 @@ tmux-dependent layers run when tmux is present and skip cleanly when it is not (
 under `-short`). Please run `make lint` before opening a PR — CI enforces `gofmt`
 and `go vet`.
 
-## The easiest, most useful contribution: a provider fixture
+## The easiest, most useful contribution: a program fixture
 
-Provider parsers (Claude / Codex / Copilot) are validated by committed transcript
+The program parsers (Claude / Codex / Copilot) are validated by committed transcript
 fixtures, so adding coverage — or fixing a misclassification when a provider's TUI
 changes — is the highest-leverage contribution. The full flow is in the README:
-**[Contributing a provider fixture](README.md#contributing-a-provider-fixture)**.
+**[Contributing a program fixture](README.md#contributing-a-program-fixture)**.
 In short: drop a captured screen at
-`internal/provider/testdata/fixtures/<provider>/<state>.txt`, run `make fixtures`,
-then `go test ./internal/provider`. The fixture test self-checks that the detected
-provider and status match the file's location, so a mislabeled fixture fails rather
+`internal/program/testdata/fixtures/<program>/<state>.txt`, run `make fixtures`,
+then `go test ./internal/program`. The fixture test self-checks that the detected
+program and status match the file's location, so a mislabeled fixture fails rather
 than silently passing.
 
-If you hit a misclassification in the wild, the **provider-drift** issue template is
+If you hit a misclassification in the wild, the **program-drift** issue template is
 the fastest way to report it — include the `--explain` trace and a sanitized screen.
 
 ## Scope
 
 muxray does one thing: make a tmux pane legible to an agent (list, snapshot, diff,
-status). Feature requests that keep that focus — a new provider parser, a new
+status). Feature requests that keep that focus — a new program parser, a new
 deterministic output field, a sharper state model — are in scope. A request that
 turns muxray into a session manager, a TUI, or a network service is probably out of
 scope; open an issue to discuss before building.
@@ -62,7 +62,7 @@ stdlib-only by design.
 
 ## Reporting bugs
 
-Use the issue templates (bug report, provider drift, feature request). For bug
+Use the issue templates (bug report, program drift, feature request). For bug
 reports, `muxray version` and `muxray doctor` output help a lot, and
 `muxray bundle` produces a **sanitized** diagnostic bundle (pane content omitted by
 default) when more detail is needed.

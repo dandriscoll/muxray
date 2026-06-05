@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest a new output field, provider, or behavior
+about: Suggest a new output field, program parser, or behavior
 title: ""
 labels: enhancement
 ---

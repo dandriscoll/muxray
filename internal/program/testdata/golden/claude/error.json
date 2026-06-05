@@ -1,0 +1,5 @@
+{
+  "program": "claude",
+  "status": "error",
+  "rule_id": "claude.error"
+}

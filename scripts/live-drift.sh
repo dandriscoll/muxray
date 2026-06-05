@@ -77,14 +77,14 @@ check_provider() {
   out="$("$MUXRAY" status --pane "$SESSION" --explain 2>"$ARTIFACTS/$name.stderr")"
   printf '%s\n' "$out" > "$ARTIFACTS/$name.status.json"
 
-  local provider status
-  provider="$(printf '%s' "$out" | grep -o '"provider": *"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//')"
+  local program status
+  program="$(printf '%s' "$out" | grep -o '"program": *"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//')"
   status="$(printf '%s' "$out" | grep -o '"status": *"[^"]*"' | head -1 | sed 's/.*: *"//;s/"//')"
 
-  if [ "$provider" = "$name" ] && [ "$status" != "unknown" ]; then
-    log "OK: $name classified as $provider/$status"
+  if [ "$program" = "$name" ] && [ "$status" != "unknown" ]; then
+    log "OK: $name classified as $program/$status"
   else
-    log "PARSER_FAIL: $name pane classified as ${provider:-?}/${status:-?} (expected provider=$name, a known status)"
+    log "PARSER_FAIL: $name pane classified as ${program:-?}/${status:-?} (expected program=$name, a known status)"
     # Save a sanitized bundle to help diagnose the drift without leaking secrets.
     "$MUXRAY" bundle --out "$ARTIFACTS/$name.bundle.json" >/dev/null 2>&1 || true
     parser_failures=$((parser_failures + 1))

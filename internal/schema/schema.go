@@ -10,7 +10,7 @@ import "time"
 // in a way an agent could observe. It is emitted on every command result so an
 // agent can detect format drift (the directive's "output format changed enough
 // that status is unknown" condition, surfaced at the envelope level).
-const Version = "1"
+const Version = "2"
 
 // Envelope holds the fields common to every command's JSON output. Each command
 // response struct embeds it.

@@ -10,7 +10,7 @@ answers to three questions, repeatedly and cheaply:
 1. **What is in this pane?** — structured capture and snapshots.
 2. **Did it change since I last looked?** — deterministic `changed: false`, or a
    compact, LLM-friendly diff when it did.
-3. **What is the agent in this pane doing?** — provider-specific status parsing
+3. **What is the agent in this pane doing?** — program-specific status parsing
    for **Claude**, **Codex**, and **Copilot** into a deterministic state model
    (`idle`, `running`, `blocked`, `waiting_for_input`, `needs_approval`,
    `error`, `completed`, `unknown`).
@@ -39,7 +39,7 @@ $ muxray status --pane work:1.0
 ```
 
 ```json
-{ "classification": { "provider": "codex", "status": "running", "evidence": "Working (esc to interrupt)" } }
+{ "classification": { "program": "codex", "status": "running", "evidence": "Working (esc to interrupt)" } }
 ```
 
 *(Trimmed — the [full self-describing output](#example-output) also carries the
@@ -129,15 +129,15 @@ muxray inspect --pane %3
 
 ## Example output
 
-### `muxray status` — provider state detection
+### `muxray status` — program state detection
 
 ```json
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "command": "status",
   "target": { "raw": "work", "session": "work" },
   "classification": {
-    "provider": "codex",
+    "program": "codex",
     "status": "running",
     "rule_id": "codex.running",
     "match_source": "rule:codex.running",
@@ -148,7 +148,9 @@ muxray inspect --pane %3
 }
 ```
 
-`provider` and `status` are the load-bearing fields. `rule_id` / `match_source`
+`program` and `status` are the load-bearing fields. `program` is the program
+muxray recognized in the pane — `claude`, `codex`, `copilot`, or `unknown` for
+any pane it doesn't recognize (a plain shell, an editor, …). `rule_id` / `match_source`
 and `evidence` make the classification **explainable** — pass `--explain` to get
 the full parser trace, including every rule considered and why a result was
 `unknown`.
@@ -205,7 +207,7 @@ reproducible across machines.
 | `muxray list`      | List sessions/windows/panes (structured)                       |
 | `muxray snapshot`  | Capture a pane to the local store and/or `--out <file>`        |
 | `muxray diff`      | Compare current pane against a previous snapshot (`--since`)   |
-| `muxray status`    | Classify provider state for the pane                           |
+| `muxray status`    | Classify program state for the pane                            |
 | `muxray inspect`   | Snapshot + diff + status in one call                           |
 | `muxray doctor`    | Report environment/tooling diagnostics                         |
 | `muxray telemetry` | `telemetry show` prints exactly what telemetry would be sent   |
@@ -254,10 +256,10 @@ and **skip cleanly** when it is not (or under `-short`).
 | Layer            | What it covers                                                              | Command |
 | ---------------- | --------------------------------------------------------------------------- | ------- |
 | **Unit**         | normalization, diff, snapshot, target parsing, telemetry redaction, CLI     | `go test ./...` |
-| **Fixture**      | committed provider transcripts → classification, self-checked against the fixture's labeled state | `go test ./internal/provider` |
-| **Golden**       | provider classifications and a representative command output                | `go test ./...` (regenerate with `make fixtures`) |
+| **Fixture**      | committed program transcripts → classification, self-checked against the fixture's labeled state | `go test ./internal/program` |
+| **Golden**       | program classifications and a representative command output                | `go test ./...` (regenerate with `make fixtures`) |
 | **tmux integration** | real tmux session on a private socket, captured through muxray          | `go test ./internal/tmux` |
-| **Mock harness** | a dummy backend renders provider-characteristic screens into a real tmux pane and asserts state transitions | `go test ./internal/tmux -run Harness` |
+| **Mock harness** | a dummy backend renders program-characteristic screens into a real tmux pane and asserts state transitions | `go test ./internal/tmux -run Harness` |
 | **Nightly live drift** | drives real Claude/Codex/Copilot flows to catch upstream TUI drift   | nightly CI (see below) |
 
 ```sh
@@ -311,21 +313,21 @@ Artifacts uploaded for diagnosis are sanitized (no secrets, no raw content). See
 
 ---
 
-## Contributing a provider fixture
+## Contributing a program fixture
 
-The provider parsers are validated by fixtures, so adding coverage is easy:
+The program parsers are validated by fixtures, so adding coverage is easy:
 
-1. Capture a real screen for a provider state and save it as
-   `internal/provider/testdata/fixtures/<provider>/<state>.txt`, where
-   `<provider>` is `claude`, `codex`, or `copilot` (or `generic` for non-agent
+1. Capture a real screen for a program state and save it as
+   `internal/program/testdata/fixtures/<program>/<state>.txt`, where
+   `<program>` is `claude`, `codex`, or `copilot` (or `generic` for non-agent
    output) and `<state>` is one of the status values (`running`,
    `needs_approval`, …).
 2. Run `make fixtures` to generate the golden classification.
-3. Run `go test ./internal/provider`. The fixture test **self-checks** that the
-   detected provider and status match the directory and file names — so a
+3. Run `go test ./internal/program`. The fixture test **self-checks** that the
+   detected program and status match the directory and file names — so a
    mislabeled or non-representative fixture fails rather than silently passing.
 
-Parser rules live in `internal/provider/{claude,codex,copilot}.go` as small,
+Parser rules live in `internal/program/{claude,codex,copilot}.go` as small,
 ordered, named rules. Each rule is a status plus a set of characteristic phrases;
 the first matching rule wins, and a distinctive brand signature out-ranks a
 generic UI phrase shared across harnesses.

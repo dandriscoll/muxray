@@ -29,9 +29,9 @@ vet:
 install:
 	go install -ldflags "$(LDFLAGS)" ./cmd/muxray
 
-# Regenerate golden files intentionally (provider classifications + command goldens).
+# Regenerate golden files intentionally (program classifications + command goldens).
 fixtures:
-	go test ./internal/provider ./internal/cli -run 'TestFixtures|TestTelemetryShowGolden' -update
+	go test ./internal/program ./internal/cli -run 'TestFixtures|TestTelemetryShowGolden' -update
 
 release:
 	./scripts/build-release.sh $(VERSION)

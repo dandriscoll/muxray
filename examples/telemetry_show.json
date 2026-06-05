@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "muxray_version": "v0.1.0",
   "command": "telemetry.show",
   "generated_at": "2026-06-05T12:00:00Z",
@@ -14,7 +14,7 @@
     "command": "status",
     "duration_ms": 12,
     "success": true,
-    "provider": "claude",
+    "program": "claude",
     "status": "running",
     "rule_id": "claude.running",
     "confidence": 0.9,

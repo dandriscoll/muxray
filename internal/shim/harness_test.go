@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/dandriscoll/muxray/internal/normalize"
-	"github.com/dandriscoll/muxray/internal/provider"
+	"github.com/dandriscoll/muxray/internal/program"
 	"github.com/dandriscoll/muxray/internal/shim"
 	"github.com/dandriscoll/muxray/internal/tmux"
 )
@@ -99,14 +99,14 @@ func TestClaudeTUIClassificationAgainstShim(t *testing.T) {
 	// the shell before the TUI has rendered (which would read as claude/unknown).
 	target := tmux.Target{Raw: session}
 	deadline := time.Now().Add(25 * time.Second)
-	var res provider.Result
+	var res program.Result
 	sawClaude := false
 	for time.Now().Before(deadline) {
 		if raw, err := tmux.Capture(target, tmux.CaptureOpts{JoinWrapped: true}); err == nil {
-			res = provider.Detect(normalize.Clean(raw, 200).Clean, false)
-			if res.Provider == "claude" {
+			res = program.Detect(normalize.Clean(raw, 200).Clean, false)
+			if res.Program == "claude" {
 				sawClaude = true
-				if res.Status != provider.StatusUnknown {
+				if res.Status != program.StatusUnknown {
 					break
 				}
 			}
@@ -114,8 +114,8 @@ func TestClaudeTUIClassificationAgainstShim(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}
 
-	if res.Provider != "claude" || res.Status == provider.StatusUnknown {
-		t.Skipf("real claude TUI did not reach a definite state in time (onboarding/version dependent); sawClaude=%v last=%s/%s", sawClaude, res.Provider, res.Status)
+	if res.Program != "claude" || res.Status == program.StatusUnknown {
+		t.Skipf("real claude TUI did not reach a definite state in time (onboarding/version dependent); sawClaude=%v last=%s/%s", sawClaude, res.Program, res.Status)
 	}
 	t.Logf("muxray classified the real claude TUI as claude/%s (rule=%s)", res.Status, res.RuleID)
 }

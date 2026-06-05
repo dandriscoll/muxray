@@ -12,7 +12,7 @@
     "line_count": 42,
     "muxray_version": "dev",
     "os": "linux",
-    "provider": "claude",
+    "program": "claude",
     "rule_id": "claude.running",
     "status": "running",
     "success": true,
@@ -25,5 +25,5 @@
   "muxray_version": "\u003cnormalized\u003e",
   "network_sink": false,
   "note": "This version has NO network telemetry sink. Events are content-free by construction (only counts, classes, booleans, and hashes — never pane text, prompts, secrets, or environment). Local diagnostic logging is written only under --debug. Disable everything with MUXRAY_NO_TELEMETRY=1 or DO_NOT_TRACK=1.",
-  "schema_version": "1"
+  "schema_version": "2"
 }

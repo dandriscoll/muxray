@@ -1,5 +1,0 @@
-{
-  "provider": "claude",
-  "status": "waiting_for_input",
-  "rule_id": "claude.waiting_for_input"
-}

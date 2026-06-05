@@ -1,10 +1,10 @@
 package tmux_test
 
-// Mock-harness tests: a deterministic "dummy backend" emits provider-
+// Mock-harness tests: a deterministic "dummy backend" emits program-
 // characteristic terminal output into a real tmux pane, which muxray then reads
 // through its real capture -> normalize -> classify pipeline. This validates the
 // end-to-end classification of state transitions (startup, running, approval,
-// error, completion) without any real model call or provider credential.
+// error, completion) without any real model call or program credential.
 //
 // The screens are rendered with printf (no temp files), so the test is hermetic
 // and does not depend on the surrounding TMPDIR path. These run on the default
@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/dandriscoll/muxray/internal/normalize"
-	"github.com/dandriscoll/muxray/internal/provider"
+	"github.com/dandriscoll/muxray/internal/program"
 	"github.com/dandriscoll/muxray/internal/tmux"
 )
 
@@ -40,16 +40,16 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 	defer exec.Command("tmux", "kill-session", "-t", session).Run()
 
 	steps := []struct {
-		name         string
-		lines        []string
-		wantProvider string
-		wantStatus   provider.Status
+		name        string
+		lines       []string
+		wantProgram string
+		wantStatus  program.Status
 	}{
-		{"startup", []string{"GitHub Copilot", "  How can I help you today?", "  copilot>"}, "copilot", provider.StatusIdle},
-		{"running", []string{"OpenAI Codex", "  Working (esc to interrupt)", "  Running command: go test"}, "codex", provider.StatusRunning},
-		{"approval", []string{"Claude Code", "  Claude wants to run a command.", "  Do you want to proceed?", "  1. Yes"}, "claude", provider.StatusNeedsApproval},
-		{"error", []string{"Claude", "  API Error: 500 Internal Server Error", "  The request failed."}, "claude", provider.StatusError},
-		{"completion", []string{"Claude", "  Done! Completed in 1m 24s.", "", "  ? for shortcuts"}, "claude", provider.StatusCompleted},
+		{"startup", []string{"GitHub Copilot", "  How can I help you today?", "  copilot>"}, "copilot", program.StatusIdle},
+		{"running", []string{"OpenAI Codex", "  Working (esc to interrupt)", "  Running command: go test"}, "codex", program.StatusRunning},
+		{"approval", []string{"Claude Code", "  Claude wants to run a command.", "  Do you want to proceed?", "  1. Yes"}, "claude", program.StatusNeedsApproval},
+		{"error", []string{"Claude", "  API Error: 500 Internal Server Error", "  The request failed."}, "claude", program.StatusError},
+		{"completion", []string{"Claude", "  Done! Completed in 1m 24s.", "", "  ? for shortcuts"}, "claude", program.StatusCompleted},
 	}
 
 	for i, s := range steps {
@@ -62,7 +62,7 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 			//      actually drawn and the prior step cleared, not while the next
 			//      command is merely echoed.
 			//   2. The token is a unique, word-free string (MUXRDY<i>) so it never
-			//      collides with a provider rule phrase (e.g. "done").
+			//      collides with a program rule phrase (e.g. "done").
 			payload := strings.Join(s.lines, `\n`) + `\n`
 			ready := "MUXRDY" + strconv.Itoa(i)
 			sendKeys(t, session, "clear")
@@ -77,10 +77,10 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 				t.Fatalf("muxray Capture: %v", err)
 			}
 			clean := normalize.Clean(raw, 200).Clean
-			res := provider.Detect(clean, false)
-			if res.Provider != s.wantProvider || res.Status != s.wantStatus {
+			res := program.Detect(clean, false)
+			if res.Program != s.wantProgram || res.Status != s.wantStatus {
 				t.Errorf("step %s: got %s/%s, want %s/%s\npane:\n%s",
-					s.name, res.Provider, res.Status, s.wantProvider, s.wantStatus, clean)
+					s.name, res.Program, res.Status, s.wantProgram, s.wantStatus, clean)
 			}
 		})
 	}

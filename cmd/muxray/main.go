@@ -1,6 +1,6 @@
 // Command muxray reads tmux sessions/panes and adapts their output for LLM
 // agents: structured listing, snapshotting, change diffing, and deterministic
-// provider-state classification for Claude, Codex, and Copilot.
+// program-state classification for Claude, Codex, and Copilot.
 package main
 
 import (

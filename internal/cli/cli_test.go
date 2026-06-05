@@ -70,7 +70,7 @@ func TestDoctorJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &m); err != nil {
 		t.Fatalf("doctor output is not JSON: %v\n%s", err, out)
 	}
-	if m["command"] != "doctor" || m["schema_version"] != "1" {
+	if m["command"] != "doctor" || m["schema_version"] != "2" {
 		t.Errorf("envelope wrong: %v", m)
 	}
 	if _, ok := m["diagnostics"]; !ok {

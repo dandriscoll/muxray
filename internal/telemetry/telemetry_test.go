@@ -65,7 +65,7 @@ func TestEventIsContentFree(t *testing.T) {
 	allowed := map[string]bool{
 		"muxray_version": true, "os": true, "arch": true, "tmux_version": true,
 		"command": true, "duration_ms": true, "success": true, "error_class": true,
-		"provider": true, "status": true, "rule_id": true, "confidence": true,
+		"program": true, "status": true, "rule_id": true, "confidence": true,
 		"ansi_normalized": true, "line_count": true, "char_count": true,
 		"truncated": true, "diff_changed": true, "diff_hunks": true,
 		"snapshot_read_ok": true, "snapshot_write_ok": true, "harness": true,

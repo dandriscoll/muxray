@@ -24,7 +24,7 @@ What you expected, and what you got instead (paste the JSON/stderr if you can).
 - `muxray doctor` (paste the output):
 - OS / arch:
 - tmux version (if relevant):
-- Provider (claude / codex / copilot / n/a):
+- Program (claude / codex / copilot / n/a):
 
 **Extra detail (optional)**
 `muxray bundle` produces a sanitized diagnostic bundle (pane content is omitted by

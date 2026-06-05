@@ -9,7 +9,7 @@ import (
 
 	"github.com/dandriscoll/muxray/internal/diag"
 	"github.com/dandriscoll/muxray/internal/diff"
-	"github.com/dandriscoll/muxray/internal/provider"
+	"github.com/dandriscoll/muxray/internal/program"
 	"github.com/dandriscoll/muxray/internal/schema"
 	"github.com/dandriscoll/muxray/internal/snapshot"
 	"github.com/dandriscoll/muxray/internal/telemetry"
@@ -292,9 +292,9 @@ func resolveSince(since string, target tmux.Target) (*snapshot.Snapshot, *cmdErr
 
 type statusResponse struct {
 	schema.Envelope
-	Target   tmux.Target     `json:"target"`
-	Provider provider.Result `json:"classification"`
-	Tail     []string        `json:"tail_excerpt"`
+	Target         tmux.Target    `json:"target"`
+	Classification program.Result `json:"classification"`
+	Tail           []string       `json:"tail_excerpt"`
 }
 
 func cmdStatus(args []string) int {
@@ -316,23 +316,23 @@ func cmdStatus(args []string) int {
 	if cerr != nil {
 		return emitError(wantJSON, "status", cerr)
 	}
-	result := provider.Detect(snap.Clean, c.explain)
+	result := program.Detect(snap.Clean, c.explain)
 	resp := statusResponse{
-		Envelope: schema.NewEnvelope("status", version.Version),
-		Target:   target,
-		Provider: result,
-		Tail:     tailExcerpt(snap.Clean, 10),
+		Envelope:       schema.NewEnvelope("status", version.Version),
+		Target:         target,
+		Classification: result,
+		Tail:           tailExcerpt(snap.Clean, 10),
 	}
 	recordEvent(telemetry.Event{
-		Command: "status", Success: true, Provider: result.Provider, Status: string(result.Status),
-		RuleID: result.RuleID, Confidence: result.Confidence, Harness: result.Provider,
+		Command: "status", Success: true, Program: result.Program, Status: string(result.Status),
+		RuleID: result.RuleID, Confidence: result.Confidence, Harness: result.Program,
 		ANSINormalized: snap.ANSINormalized, LineCount: snap.LineCount, CharCount: snap.CharCount,
 		Truncated: snap.Truncated, ContentFingerprint: telemetry.Fingerprint(snap.Clean),
 	}, c.debug, start)
 
 	return emit(wantJSON, resp, func() string {
 		return fmt.Sprintf("%s/%s  (rule=%s confidence=%.2f)",
-			result.Provider, result.Status, result.RuleID, result.Confidence)
+			result.Program, result.Status, result.RuleID, result.Confidence)
 	})
 }
 
@@ -340,10 +340,10 @@ func cmdStatus(args []string) int {
 
 type inspectResponse struct {
 	schema.Envelope
-	Target   tmux.Target        `json:"target"`
-	Snapshot *snapshot.Snapshot `json:"snapshot"`
-	Diff     *diff.Result       `json:"diff,omitempty"`
-	Status   provider.Result    `json:"classification"`
+	Target         tmux.Target        `json:"target"`
+	Snapshot       *snapshot.Snapshot `json:"snapshot"`
+	Diff           *diff.Result       `json:"diff,omitempty"`
+	Classification program.Result     `json:"classification"`
 }
 
 func cmdInspect(args []string) int {
@@ -367,13 +367,13 @@ func cmdInspect(args []string) int {
 	if cerr != nil {
 		return emitError(wantJSON, "inspect", cerr)
 	}
-	result := provider.Detect(snap.Clean, c.explain)
+	result := program.Detect(snap.Clean, c.explain)
 
 	resp := inspectResponse{
-		Envelope: schema.NewEnvelope("inspect", version.Version),
-		Target:   target,
-		Snapshot: snap,
-		Status:   result,
+		Envelope:       schema.NewEnvelope("inspect", version.Version),
+		Target:         target,
+		Snapshot:       snap,
+		Classification: result,
 	}
 	// Diff against the previous snapshot when one exists; absence is not an error.
 	if prev, derr := resolveSince(*since, target); derr == nil {
@@ -391,8 +391,8 @@ func cmdInspect(args []string) int {
 		hunks = resp.Diff.Hunks
 	}
 	recordEvent(telemetry.Event{
-		Command: "inspect", Success: true, Provider: result.Provider, Status: string(result.Status),
-		RuleID: result.RuleID, Confidence: result.Confidence, Harness: result.Provider,
+		Command: "inspect", Success: true, Program: result.Program, Status: string(result.Status),
+		RuleID: result.RuleID, Confidence: result.Confidence, Harness: result.Program,
 		ANSINormalized: snap.ANSINormalized, LineCount: snap.LineCount, CharCount: snap.CharCount,
 		Truncated: snap.Truncated, DiffChanged: changed, DiffHunks: hunks,
 		ContentFingerprint: telemetry.Fingerprint(snap.Clean),
@@ -404,7 +404,7 @@ func cmdInspect(args []string) int {
 			ch = fmt.Sprintf("%v", resp.Diff.Changed)
 		}
 		return fmt.Sprintf("%s/%s  changed=%s  (%d lines)",
-			result.Provider, result.Status, ch, snap.LineCount)
+			result.Program, result.Status, ch, snap.LineCount)
 	})
 }
 
@@ -474,7 +474,7 @@ func cmdTelemetry(args []string) int {
 		example := telemetry.Event{
 			MuxrayVersion: version.Version, OS: "linux", Arch: "amd64", TmuxVersion: "3.4",
 			Command: "status", DurationMS: 12, Success: true,
-			Provider: "claude", Status: "running", RuleID: "claude.running", Confidence: 0.9,
+			Program: "claude", Status: "running", RuleID: "claude.running", Confidence: 0.9,
 			ANSINormalized: true, LineCount: 42, CharCount: 1337, Truncated: false,
 			ContentFingerprint: "0123456789abcdef", InvocationID: "example",
 		}

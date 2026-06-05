@@ -5,7 +5,7 @@
 //
 // Design principle (see the design note): cleaned text is the unit of truth.
 // Raw bytes are preserved elsewhere, but all logic — content hashing, diffing,
-// provider parsing — runs on the output of this package.
+// program parsing — runs on the output of this package.
 package normalize
 
 import (

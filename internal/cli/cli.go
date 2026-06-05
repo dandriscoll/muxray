@@ -197,7 +197,7 @@ Commands:
   list        List tmux sessions/windows/panes (structured)
   snapshot    Capture a pane snapshot (stored locally; --out to also write a file)
   diff        Compare the current pane against a previous snapshot (--since)
-  status      Classify the provider state (Claude/Codex/Copilot) of a pane
+  status      Classify the program state (Claude/Codex/Copilot, or unknown) of a pane
   inspect     Snapshot + diff + status in one call
   doctor      Report environment/tooling diagnostics
   telemetry   Inspect telemetry (telemetry show prints exactly what would be sent)
@@ -214,7 +214,7 @@ Common flags:
 
 Exit codes: 0 ok · 1 internal · 2 usage · 3 tmux/capture · 4 snapshot not found
 
-JSON is the default output. Provider parsing degrades to status "unknown" rather
+JSON is the default output. Program parsing degrades to status "unknown" rather
 than failing. See 'muxray <command> -h' for command-specific flags.
 `)
 }

@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/dandriscoll/muxray"
 	"github.com/dandriscoll/muxray/internal/normalize"
 	"github.com/dandriscoll/muxray/internal/schema"
 	"github.com/dandriscoll/muxray/internal/snapshot"
@@ -60,6 +61,9 @@ func Run(args []string) int {
 		return cmdBundle(rest)
 	case "shim":
 		return cmdShim(rest)
+	case "usage":
+		fmt.Fprint(stdout, muxray.Usage)
+		return ExitOK
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, version.String())
 		return ExitOK
@@ -203,6 +207,7 @@ Commands:
   telemetry   Inspect telemetry (telemetry show prints exactly what would be sent)
   bundle      Produce a sanitized diagnostic bundle for bug reports
   shim        Run a local credential-free fake LLM backend for a harness
+  usage       Print the agent-facing calling contract (same as USAGE.md)
   version     Print the muxray version
 
 Common flags:

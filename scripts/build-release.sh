@@ -24,7 +24,7 @@ for p in "${platforms[@]}"; do
   echo "building ${os}/${arch}..."
   GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
     go build -trimpath -ldflags "$LDFLAGS" -o "$stage/muxray" ./cmd/muxray
-  cp README.md LICENSE "$stage/" 2>/dev/null || true
+  cp README.md LICENSE USAGE.md "$stage/" 2>/dev/null || true
   tar -C "$DIST" -czf "$DIST/muxray_${VERSION}_${os}_${arch}.tar.gz" "muxray_${os}_${arch}"
   rm -rf "$stage"
 done

@@ -37,9 +37,23 @@ func TestHelp(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("exit=%d", code)
 	}
-	for _, cmd := range []string{"list", "snapshot", "diff", "status", "inspect", "doctor"} {
+	for _, cmd := range []string{"list", "snapshot", "diff", "status", "inspect", "doctor", "usage"} {
 		if !strings.Contains(out, cmd) {
 			t.Errorf("help missing command %q", cmd)
+		}
+	}
+}
+
+func TestUsage(t *testing.T) {
+	out, _, code := run("usage")
+	if code != ExitOK {
+		t.Fatalf("exit=%d", code)
+	}
+	// The agent-facing contract must name the load-bearing fields an agent branches
+	// on; if any of these go missing the doc has lost its purpose.
+	for _, marker := range []string{"schema_version", "program", "status", "Exit codes"} {
+		if !strings.Contains(out, marker) {
+			t.Errorf("usage output missing %q", marker)
 		}
 	}
 }

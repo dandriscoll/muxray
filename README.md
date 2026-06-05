@@ -231,6 +231,7 @@ reproducible across machines.
 | `muxray telemetry` | `telemetry show` prints exactly what telemetry would be sent   |
 | `muxray bundle`    | Produce a sanitized diagnostic bundle for bug reports          |
 | `muxray shim`      | Run a local credential-free fake LLM backend for a harness     |
+| `muxray usage`     | Print the agent-facing calling contract (same as `USAGE.md`)   |
 | `muxray version`   | Print the version                                              |
 
 Common flags: `--pane`, `--json` (default), `--text`, `--lines N` (history cap,

@@ -1,0 +1,26 @@
+{
+  "schema_version": "1",
+  "muxray_version": "v0.1.0",
+  "command": "diff",
+  "generated_at": "2026-06-05T12:00:00Z",
+  "target": {
+    "raw": "mxdemo",
+    "session": "mxdemo"
+  },
+  "changed": false,
+  "summary": "no changes",
+  "added": [],
+  "removed": [],
+  "hunks": 0,
+  "added_count": 0,
+  "removed_count": 0,
+  "truncated": false,
+  "current_tail_excerpt": [
+    "OpenAI Codex",
+    "  Working (esc to interrupt)",
+    "  Running command: go test ./...",
+    "user@host:~$"
+  ],
+  "previous_snapshot": "d0ac3a36726c",
+  "current_snapshot": "0ad45ef55d49"
+}

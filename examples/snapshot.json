@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "muxray_version": "v0.1.0",
+  "command": "snapshot",
+  "generated_at": "2026-06-05T12:00:00Z",
+  "snapshot": {
+    "schema_version": "1",
+    "id": "d0ac3a36726c",
+    "captured_at": "2026-06-05T12:00:00Z",
+    "target": {
+      "raw": "mxdemo",
+      "session": "mxdemo"
+    },
+    "tmux_version": "3.4",
+    "clean": "OpenAI Codex\n  Working (esc to interrupt)\n  Running command: go test ./...\n code@muxray  /src/muxray   main !?",
+    "line_count": 4,
+    "char_count": 110,
+    "truncated": false,
+    "ansi_normalized": true,
+    "content_hash": "sha256:53460ef6283dc6dc24aaaa1f276117d4698cfc7ef7f4a24736bd46e16ddcf851"
+  },
+  "store_path": "~/.local/state/muxray/snapshots/mxdemo/d0ac3a36726c.json"
+}

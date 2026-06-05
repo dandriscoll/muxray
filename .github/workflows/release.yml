@@ -1,0 +1,28 @@
+name: release
+
+# Builds static binaries for Linux and macOS (amd64 + arm64) and publishes them
+# as a GitHub Release when a v* tag is pushed.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build release artifacts
+        run: ./scripts/build-release.sh "${GITHUB_REF_NAME}"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.tar.gz dist/checksums.txt --title "${GITHUB_REF_NAME}" --generate-notes

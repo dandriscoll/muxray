@@ -1,0 +1,51 @@
+{
+  "schema_version": "1",
+  "muxray_version": "v0.1.0",
+  "command": "list",
+  "generated_at": "2026-06-05T12:00:00Z",
+  "sessions": [
+    {
+      "name": "default",
+      "windows": [
+        {
+          "index": "0",
+          "name": "claude",
+          "active": true,
+          "panes": [
+            {
+              "pane_index": "0",
+              "pane_id": "%0",
+              "active": true,
+              "current_command": "claude",
+              "title": "⠂ Build Muxray Go CLI tool for LLM tmux integration",
+              "width": 120,
+              "height": 28
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "work",
+      "windows": [
+        {
+          "index": "0",
+          "name": "bash",
+          "active": true,
+          "panes": [
+            {
+              "pane_index": "0",
+              "pane_id": "%4",
+              "active": true,
+              "current_command": "bash",
+              "title": "muxray",
+              "width": 120,
+              "height": 28
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "pane_count": 2
+}

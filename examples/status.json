@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "muxray_version": "v0.1.0",
+  "command": "status",
+  "generated_at": "2026-06-05T12:00:00Z",
+  "target": {
+    "raw": "mxdemo",
+    "session": "mxdemo"
+  },
+  "classification": {
+    "provider": "codex",
+    "status": "running",
+    "rule_id": "codex.running",
+    "match_source": "rule:codex.running",
+    "confidence": 0.88,
+    "evidence": "Working (esc to interrupt)"
+  },
+  "tail_excerpt": [
+    "OpenAI Codex",
+    "  Working (esc to interrupt)",
+    "  Running command: go test ./...",
+    "user@host:~$"
+  ]
+}

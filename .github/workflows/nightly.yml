@@ -1,0 +1,73 @@
+name: nightly
+
+# Runs the FULL test suite every day to catch regressions in muxray's own
+# parsers (the deterministic fixture/golden/harness layers) and, optionally, to
+# catch upstream Claude/Codex/Copilot TUI drift via a live-provider job that runs
+# only when the repository is configured with provider access.
+#
+# The deterministic job needs no secrets and is the primary daily drift signal.
+# The live job is best-effort and is structured so a provider outage, auth
+# failure, rate limit, or missing harness is reported distinctly from a real
+# parser regression — and never leaks secrets into logs or artifacts.
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install tmux (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install tmux (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tmux
+      - name: Full test suite
+        run: go test -count=1 ./...
+
+  # Live drift checks. Gated on the repository variable MUXRAY_LIVE_ENABLED so
+  # forks and ordinary contributors never run it. When enabled, the maintainer's
+  # configured secrets/CLIs are used; when not, the job exits cleanly.
+  live-drift:
+    needs: deterministic
+    runs-on: ubuntu-latest
+    if: ${{ vars.MUXRAY_LIVE_ENABLED == 'true' }}
+    env:
+      # Provider credentials are injected from secrets only when configured.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GH_COPILOT_TOKEN: ${{ secrets.GH_COPILOT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Build muxray
+        run: go build -o muxray ./cmd/muxray
+      - name: Run live drift checks
+        run: ./scripts/live-drift.sh
+      - name: Upload sanitized drift artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-drift-report
+          path: drift-artifacts/
+          if-no-files-found: ignore

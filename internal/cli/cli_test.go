@@ -144,3 +144,31 @@ func TestDiff_SnapshotNotFound(t *testing.T) {
 func insideTmuxForTest() bool {
 	return os.Getenv("TMUX") != "" || os.Getenv("TMUX_PANE") != ""
 }
+
+func TestShimOnce(t *testing.T) {
+	out, _, code := run("shim", "--provider", "anthropic", "--scenario", "approval", "--once")
+	if code != ExitOK {
+		t.Fatalf("exit=%d", code)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		t.Fatalf("shim output is not JSON: %v\n%s", err, out)
+	}
+	if m["provider"] != "anthropic" || m["scenario"] != "approval" {
+		t.Errorf("unexpected shim response: %v", m)
+	}
+	env, ok := m["env"].(map[string]any)
+	if !ok || env["ANTHROPIC_BASE_URL"] == nil || env["ANTHROPIC_API_KEY"] == nil {
+		t.Errorf("missing env in shim response: %v", m["env"])
+	}
+}
+
+func TestShimUnknownProvider(t *testing.T) {
+	_, errOut, code := run("shim", "--provider", "bogus", "--once")
+	if code != ExitUsage {
+		t.Errorf("exit=%d, want %d", code, ExitUsage)
+	}
+	if !strings.Contains(errOut, "unknown provider") {
+		t.Errorf("stderr: %q", errOut)
+	}
+}

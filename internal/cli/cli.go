@@ -58,6 +58,8 @@ func Run(args []string) int {
 		return cmdTelemetry(rest)
 	case "bundle":
 		return cmdBundle(rest)
+	case "shim":
+		return cmdShim(rest)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, version.String())
 		return ExitOK
@@ -200,6 +202,7 @@ Commands:
   doctor      Report environment/tooling diagnostics
   telemetry   Inspect telemetry (telemetry show prints exactly what would be sent)
   bundle      Produce a sanitized diagnostic bundle for bug reports
+  shim        Run a local credential-free fake LLM backend for a harness
   version     Print the muxray version
 
 Common flags:

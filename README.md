@@ -179,6 +179,7 @@ reproducible across machines.
 | `muxray doctor`    | Report environment/tooling diagnostics                         |
 | `muxray telemetry` | `telemetry show` prints exactly what telemetry would be sent   |
 | `muxray bundle`    | Produce a sanitized diagnostic bundle for bug reports          |
+| `muxray shim`      | Run a local credential-free fake LLM backend for a harness     |
 | `muxray version`   | Print the version                                              |
 
 Common flags: `--pane`, `--json` (default), `--text`, `--lines N` (history cap,
@@ -233,6 +234,34 @@ make test         # full suite (uses tmux if available)
 make test-short   # skip the tmux integration + harness layers
 make lint         # gofmt check + go vet
 ```
+
+### Credential-free harness testing (LLM shims)
+
+The mock-harness layer can drive the **real** Claude/Codex CLIs without any
+provider API key, by pointing them at a local, deterministic fake backend — an
+"LLM shim". `muxray shim` runs one:
+
+```sh
+# Terminal 1: start a fake Anthropic backend
+muxray shim --provider anthropic --scenario approval
+# muxray shim: anthropic (scenario=approval) listening on http://127.0.0.1:54321
+
+# Terminal 2: point the real Claude CLI at it (no key required)
+export ANTHROPIC_BASE_URL=http://127.0.0.1:54321
+export ANTHROPIC_API_KEY=muxray-shim-no-key
+claude                       # the real TUI, driven by the shim
+muxray status --pane <that pane>   # -> claude/<state>
+```
+
+`--provider` is `anthropic` (Claude) or `openai` (Codex); `--scenario` is `text`
+(plain reply → running/idle/completed), `approval` (a command request → approval
+prompt), or `error`. The shim binds loopback only and never makes a network call.
+
+The shim's HTTP surface is unit-tested in-process (no harness, no network — always
+runs), and a real-`claude` end-to-end test runs where the `claude` CLI is
+installed and skips cleanly otherwise. Copilot is not shimmable this way (its
+GitHub-OAuth auth is not base-URL-overridable) and keeps the synthetic harness
+path.
 
 ### Nightly drift checks
 

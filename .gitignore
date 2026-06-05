@@ -34,3 +34,6 @@ go.work.sum
 # Build artifacts
 /dist/
 /muxray
+
+# Local session captures (never commit)
+cap.json

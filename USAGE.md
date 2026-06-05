@@ -41,6 +41,11 @@ if it isn't the version you coded against, the shape may have changed.
   `needs_approval`, `error`, `completed`, `unknown`.
 - Pass `--explain` to attach a `trace` of every rule considered (use it to diagnose an
   `unknown`).
+- muxray only reports a state for a **genuine live Claude/Codex/Copilot frame**: it
+  reads the current state from the harness's footer. A pane that merely *mentions* a
+  harness (a shell showing logs, a transcript, muxray's own output) returns
+  `program=unknown`/`status=unknown` — that means "not a recognized live frame, parse
+  it yourself," not "something failed."
 
 `diff` carries `changed` (bool — **both `true` and `false` are exit 0**; change is not
 an error), `summary`, `added` / `removed` / `context` line arrays, `hunks`, and the

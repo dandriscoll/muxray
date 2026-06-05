@@ -68,18 +68,42 @@ type Result struct {
 	Trace       []TraceEntry `json:"trace,omitempty"`
 }
 
-// tailLines is how many of the most recent lines a parser considers — status is
-// a property of the current screen, which lives at the bottom of the pane.
+// tailLines is how many of the most recent lines the SIGNATURE considers when
+// deciding which program a pane belongs to — a brand banner can sit a little way
+// up the frame.
 const tailLines = 60
 
-// Detect classifies cleaned pane text. When no program signature is
-// recognized, it returns Program="unknown", Status=unknown — a first-class
-// result, never a crash. When explain is true, the full evaluation trace is
-// attached (powers `--explain` and the diagnosis of unknown classifications).
+// footerLines is how many of the most recent lines the STATE rules consider. A
+// live harness shows its current state in its footer (the status/input region at
+// the very bottom); state phrases that appear higher up are scrolled content
+// (a past error, a quoted log, muxray's own output), NOT the current state.
+// Bounding state to the footer is what stops a stale or incidental match from
+// being reported as the present state (issues #2 and #4). It comfortably covers
+// every representative fixture (all <= ~8 lines).
+const footerLines = 12
+
+// Detect classifies cleaned pane text. It only speaks for a genuine live
+// Claude/Codex/Copilot frame: it picks a program from the signature, then reads
+// the current state from the FOOTER. If no footer state rule matches, it returns
+// Program="unknown", Status=unknown and DECLINES — muxray does not comment on a
+// pane that merely mentions a harness (a shell showing logs, a transcript, or
+// muxray's own output) and leaves it for the agent to parse. Unknown is a
+// first-class result, never a crash. When explain is true, the full evaluation
+// trace is attached (powers `--explain` and the diagnosis of unknown results).
 func Detect(clean string, explain bool) Result {
 	text := lastLines(clean, tailLines)
 	lower := strings.ToLower(text)
+	footer := lastLines(clean, footerLines)
+	footerLower := strings.ToLower(footer)
 	var trace []TraceEntry
+
+	declined := func() Result {
+		res := Result{Program: "unknown", Status: StatusUnknown, MatchSource: "no_program_signature", Confidence: 0}
+		if explain {
+			res.Trace = trace
+		}
+		return res
+	}
 
 	// Step 1: choose the program with the strongest signature. Brand matches
 	// (strength 2) always beat generic UI hints (strength 1); ties fall to
@@ -97,21 +121,19 @@ func Detect(clean string, explain bool) Result {
 		}
 	}
 	if chosen < 0 {
-		res := Result{Program: "unknown", Status: StatusUnknown, MatchSource: "no_program_signature", Confidence: 0}
-		if explain {
-			res.Trace = trace
-		}
-		return res
+		return declined()
 	}
 
-	// Step 2: classify with the chosen program's ordered rules; first match
-	// wins. A recognized program with no matching rule reports its name with an
-	// unknown status (signature_only) rather than guessing a state.
+	// Step 2: read the current state from the FOOTER using the chosen program's
+	// ordered rules; first match wins. A program signature WITHOUT a live footer
+	// state is not a confidently-live frame — most often the harness's name just
+	// appears in displayed content — so muxray declines (unknown/unknown) rather
+	// than guessing or reporting the program off an incidental keyword.
 	a := adapters[chosen]
-	best := Result{Program: a.name, Status: StatusUnknown, MatchSource: "signature_only", Confidence: 0.3}
+	var best Result
 	fired := false
 	for _, rule := range a.rules {
-		ok, ev := rule.match(text, lower)
+		ok, ev := rule.match(footer, footerLower)
 		if explain {
 			trace = append(trace, TraceEntry{Program: a.name, RuleID: rule.ID, Status: rule.Status, Matched: ok, Evidence: ev})
 		}
@@ -129,6 +151,9 @@ func Detect(clean string, explain bool) Result {
 				break
 			}
 		}
+	}
+	if !fired {
+		return declined()
 	}
 	if explain {
 		best.Trace = trace

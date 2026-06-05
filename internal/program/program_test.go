@@ -136,6 +136,37 @@ func TestProgram_DefaultUnknown(t *testing.T) {
 	}
 }
 
+// TestDetect_StateIsFooterBound is the regression for issue #4 (and the within-frame
+// case of #2): the current state must come from the harness FOOTER, not from
+// keywords that merely appear in scrolled content or displayed output.
+func TestDetect_StateIsFooterBound(t *testing.T) {
+	pad := func(s string, n int) string { return strings.Repeat(s+"\n", n) }
+
+	// A) A genuinely RUNNING Claude frame that has an "Error:" mention in its
+	//    scrolled-up conversation. Pre-fix, the error rule (checked before running,
+	//    and matched anywhere in the tail) won → claude/error. Now the footer's
+	//    "esc to interrupt" governs → claude/running.
+	running := "Claude Code\n  Error: an earlier tool call failed\n" +
+		pad("  (scrolled conversation line)", 14) +
+		"  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt\n"
+	if res := program.Detect(running, false); res.Program != "claude" || res.Status != program.StatusRunning {
+		t.Errorf("A: running harness with a scrolled error: got %s/%s, want claude/running", res.Program, res.Status)
+	}
+
+	// B) A shell that merely DISPLAYS muxray's output (mentions Claude/Codex/Copilot
+	//    and "Error:") with a shell prompt as its footer. muxray must DECLINE — it is
+	//    not a live harness frame. (This is the cap.json class from issue #4.)
+	shell := "$ muxray inspect dan\n" +
+		"  \"classification\": { \"program\": \"claude\", \"status\": \"error\" },\n" +
+		"  \"evidence\": \"Error: something failed\",\n" +
+		"  status   Classify the program state (Claude/Codex/Copilot, or unknown)\n" +
+		pad("  \"key\": \"value\",", 14) +
+		"user@host ~ $ \n"
+	if res := program.Detect(shell, false); res.Program != "unknown" || res.Status != program.StatusUnknown {
+		t.Errorf("B: shell displaying harness keywords: got %s/%s, want unknown/unknown", res.Program, res.Status)
+	}
+}
+
 // TestExplainTrace verifies the parser trace is populated when explain is on and
 // records both matched and unmatched rules (explainability contract).
 func TestExplainTrace(t *testing.T) {

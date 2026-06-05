@@ -58,13 +58,22 @@ an error), `summary`, `added` / `removed` / `context` line arrays, `hunks`, and 
    against the latest stored snapshot). `changed: false` is deterministic and
    reproducible across machines (the hash is over cleaned text only).
 
-## Pane targets (`--pane`)
+## Pane targets (`--pane` / `--session`)
 
-`session` · `session:window.pane` (`work:1.0`) · pane id (`%3`) · session id (`$0`) ·
-omitted = the current pane when run inside tmux.
+`--pane` accepts: `session` · `session:window.pane` (`work:1.0`) · pane id (`%3`) ·
+session id (`$0`) · omitted = the current pane when run inside tmux. To target a
+session by name, `--session <name>` is a clearer equivalent (mutually exclusive with
+`--pane`).
 
 ## Exit codes
 
 `0` ok (including `changed:true`/`false`) · `1` internal · `2` usage · `3` tmux/capture
 · `4` snapshot not found. On failure, stderr carries a JSON object whose `error.class`
 is a stable, branchable identifier and whose `error.hint` names the next action.
+
+## Keeping muxray current
+
+`muxray update --check` reports whether a newer release exists; `muxray update`
+installs it in place (verifying the checksum). This is the only command that touches
+the network, it is explicit/opt-in, and it only downloads — it sends nothing.
+

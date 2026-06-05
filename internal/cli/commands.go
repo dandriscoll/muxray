@@ -145,11 +145,15 @@ func cmdSnapshot(args []string) int {
 	wantJSON := c.wantJSON()
 
 	start := time.Now()
-	target, perr := tmux.ParseTarget(c.pane)
+	spec, serr := c.targetSpec()
+	if serr != nil {
+		return emitError(wantJSON, "snapshot", serr)
+	}
+	target, perr := tmux.ParseTarget(spec)
 	if perr != nil {
 		return emitError(wantJSON, "snapshot", fromTmuxErr(perr))
 	}
-	snap, cerr := capturePane(target, c.lines)
+	snap, cerr := capturePane(target, c.lines, c.lines)
 	if cerr != nil {
 		recordEvent(telemetry.Event{Command: "snapshot", Success: false, ErrorClass: cerr.class}, c.debug, start)
 		return emitError(wantJSON, "snapshot", cerr)
@@ -215,11 +219,15 @@ func cmdDiff(args []string) int {
 	wantJSON := c.wantJSON()
 
 	start := time.Now()
-	target, perr := tmux.ParseTarget(c.pane)
+	spec, serr := c.targetSpec()
+	if serr != nil {
+		return emitError(wantJSON, "diff", serr)
+	}
+	target, perr := tmux.ParseTarget(spec)
 	if perr != nil {
 		return emitError(wantJSON, "diff", fromTmuxErr(perr))
 	}
-	cur, cerr := capturePane(target, c.lines)
+	cur, cerr := capturePane(target, c.lines, c.lines)
 	if cerr != nil {
 		return emitError(wantJSON, "diff", cerr)
 	}
@@ -308,11 +316,19 @@ func cmdStatus(args []string) int {
 	wantJSON := c.wantJSON()
 
 	start := time.Now()
-	target, perr := tmux.ParseTarget(c.pane)
+	spec, serr := c.targetSpec()
+	if serr != nil {
+		return emitError(wantJSON, "status", serr)
+	}
+	target, perr := tmux.ParseTarget(spec)
 	if perr != nil {
 		return emitError(wantJSON, "status", fromTmuxErr(perr))
 	}
-	snap, cerr := capturePane(target, c.lines)
+	// Classify the VISIBLE screen only (no scrollback): an agent TUI's current
+	// state is the current frame. Reading scrollback would let a stale error that
+	// has scrolled off the top of the pane be classified as the present state
+	// (issue #2 — historical error misclassified).
+	snap, cerr := capturePane(target, c.lines, 0)
 	if cerr != nil {
 		return emitError(wantJSON, "status", cerr)
 	}
@@ -359,15 +375,26 @@ func cmdInspect(args []string) int {
 	wantJSON := c.wantJSON()
 
 	start := time.Now()
-	target, perr := tmux.ParseTarget(c.pane)
+	spec, serr := c.targetSpec()
+	if serr != nil {
+		return emitError(wantJSON, "inspect", serr)
+	}
+	target, perr := tmux.ParseTarget(spec)
 	if perr != nil {
 		return emitError(wantJSON, "inspect", fromTmuxErr(perr))
 	}
-	snap, cerr := capturePane(target, c.lines)
+	// Snapshot keeps scrollback (it feeds the diff); classification runs on the
+	// VISIBLE screen only, so a stale error scrolled off the top is not reported
+	// as the current state (issue #2). Two captures, one consistent target.
+	snap, cerr := capturePane(target, c.lines, c.lines)
 	if cerr != nil {
 		return emitError(wantJSON, "inspect", cerr)
 	}
-	result := program.Detect(snap.Clean, c.explain)
+	screen, scerr := capturePane(target, c.lines, 0)
+	if scerr != nil {
+		return emitError(wantJSON, "inspect", scerr)
+	}
+	result := program.Detect(screen.Clean, c.explain)
 
 	resp := inspectResponse{
 		Envelope:       schema.NewEnvelope("inspect", version.Version),
@@ -521,7 +548,7 @@ func cmdBundle(args []string) int {
 	excerpt := ""
 	if *includeExcerpt {
 		if target, perr := tmux.ParseTarget(*pane); perr == nil {
-			if snap, cerr := capturePane(target, *lines); cerr == nil {
+			if snap, cerr := capturePane(target, *lines, *lines); cerr == nil {
 				excerpt = snap.Clean
 			}
 		}

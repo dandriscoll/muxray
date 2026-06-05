@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 var update = flag.Bool("update", false, "update golden files")
@@ -41,6 +44,68 @@ func TestHelp(t *testing.T) {
 		if !strings.Contains(out, cmd) {
 			t.Errorf("help missing command %q", cmd)
 		}
+	}
+}
+
+// TestStatusBoundsToVisibleScreen is the regression test for issue #2: a stale
+// error that has scrolled ABOVE the visible pane must not be classified as the
+// current state. We render a Claude error screen, then push it off the top with a
+// screenful of fresh output, and assert `muxray status` does not report `error`.
+func TestStatusBoundsToVisibleScreen(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping tmux-backed test in -short mode")
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	session := "muxray-issue2-" + strconv.Itoa(os.Getpid())
+	if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "120", "-y", "40").CombinedOutput(); err != nil {
+		t.Skipf("could not start tmux session (%v): %s", err, out)
+	}
+	defer exec.Command("tmux", "kill-session", "-t", session).Run()
+
+	send := func(line string) {
+		if out, err := exec.Command("tmux", "send-keys", "-t", session, line, "Enter").CombinedOutput(); err != nil {
+			t.Fatalf("send-keys %q: %v: %s", line, err, out)
+		}
+	}
+	// Render, in ONE command (so the geometry is deterministic — no per-command
+	// prompt lines to perturb the count): a Claude error screen, then ~45 lines of
+	// fresh output belonging to NONE of the three known programs, then a readiness
+	// sentinel. With a 40-row pane this pushes the error OFF the visible screen
+	// (>40 lines up) while keeping the whole transcript within the classifier's
+	// window (<60 lines) — so the only thing that changes the verdict is whether
+	// muxray reads the scrollback or just the visible frame. The sentinel token is
+	// quote-split so MUXRDY2 appears only in OUTPUT, never the command echo (race).
+	send(`printf 'Claude\n  API Error: 500 Internal Server Error\n  The request failed.\n'; for i in $(seq 1 45); do echo "line $i"; done; echo "MUXRDY"2`)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		out, _ := exec.Command("tmux", "capture-pane", "-p", "-t", session).CombinedOutput()
+		if strings.Contains(string(out), "MUXRDY2") {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	out, errOut, code := run("status", "--pane", session, "--json")
+	if code != ExitOK {
+		t.Fatalf("status exit=%d stderr=%s", code, errOut)
+	}
+	var resp struct {
+		Classification struct {
+			Program string `json:"program"`
+			Status  string `json:"status"`
+		} `json:"classification"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("parse status JSON: %v\n%s", err, out)
+	}
+	// The current screen is a plain shell — none of Claude/Codex/Copilot. muxray
+	// must DECLINE (program=unknown, status=unknown) and let the agent parse it,
+	// rather than reporting the historical error scrolled off the top (issue #2).
+	if resp.Classification.Program != "unknown" || resp.Classification.Status != "unknown" {
+		t.Errorf("muxray commented on an unrecognized current screen (should be unknown/unknown): got program=%q status=%q",
+			resp.Classification.Program, resp.Classification.Status)
 	}
 }
 

@@ -231,11 +231,13 @@ reproducible across machines.
 | `muxray telemetry` | `telemetry show` prints exactly what telemetry would be sent   |
 | `muxray bundle`    | Produce a sanitized diagnostic bundle for bug reports          |
 | `muxray shim`      | Run a local credential-free fake LLM backend for a harness     |
+| `muxray update`    | Update muxray in place from the latest GitHub release          |
 | `muxray usage`     | Print the agent-facing calling contract (same as `USAGE.md`)   |
 | `muxray version`   | Print the version                                              |
 
-Common flags: `--pane`, `--json` (default), `--text`, `--lines N` (history cap,
-default 200), `--debug`. Run `muxray <command> -h` for command-specific flags.
+Common flags: `--pane`, `--session <name>` (target a session by name; alternative
+to `--pane`), `--json` (default), `--text`, `--lines N` (history cap, default 200),
+`--debug`. Run `muxray <command> -h` for command-specific flags.
 
 **Exit codes:** `0` ok · `1` internal · `2` usage · `3` tmux/capture · `4`
 snapshot not found. `changed: true`/`false` are **both** exit `0` — change is not
@@ -250,7 +252,10 @@ an error. Errors are emitted as structured JSON on stderr with a `class` and a
 > `muxray` is built so that this content stays on your machine.
 
 - **No network egress.** This version ships **no telemetry network sink at all.**
-  There is nothing to leak.
+  There is nothing to leak. (The one exception is `muxray update`, which you run on
+  purpose: it only *downloads* a release from GitHub and verifies its checksum — it
+  sends no pane content, prompts, or telemetry. Like `brew upgrade`, it is explicit
+  and opt-in.)
 - **Content-free by construction.** The telemetry event type has *no field* that
   can hold raw pane text, prompts, completions, secrets, or environment — only
   counts, classes, booleans, and irreversible hashes. Run `muxray telemetry show`

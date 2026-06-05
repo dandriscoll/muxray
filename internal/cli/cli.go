@@ -61,6 +61,8 @@ func Run(args []string) int {
 		return cmdBundle(rest)
 	case "shim":
 		return cmdShim(rest)
+	case "update":
+		return cmdUpdate(rest)
 	case "usage":
 		fmt.Fprint(stdout, muxray.Usage)
 		return ExitOK
@@ -80,6 +82,7 @@ func Run(args []string) int {
 // commonFlags are shared across the pane-reading commands.
 type commonFlags struct {
 	pane    string
+	session string
 	lines   int
 	jsonOut bool
 	text    bool
@@ -89,6 +92,7 @@ type commonFlags struct {
 
 func (c *commonFlags) register(fs *flag.FlagSet, withExplain bool) {
 	fs.StringVar(&c.pane, "pane", "", "tmux target: session, session:window.pane, pane id (%N), or empty for the current pane")
+	fs.StringVar(&c.session, "session", "", "tmux session name to target (its active pane); a clearer alternative to --pane for session-level targeting")
 	fs.IntVar(&c.lines, "lines", 200, "max lines of pane history to capture and keep (tail)")
 	fs.BoolVar(&c.jsonOut, "json", true, "emit JSON (default)")
 	fs.BoolVar(&c.text, "text", false, "emit a terse human-readable summary instead of JSON")
@@ -101,6 +105,22 @@ func (c *commonFlags) register(fs *flag.FlagSet, withExplain bool) {
 // wantJSON resolves the json/text flags. JSON is the default; --text opts out,
 // and --json=false is honored consistently with the other commands.
 func (c *commonFlags) wantJSON() bool { return c.jsonOut && !c.text }
+
+// targetSpec returns the effective tmux target string from --pane / --session.
+// The two are mutually exclusive ways to name what to read; setting both is a
+// usage error rather than a silent precedence choice. --session is sugar for
+// targeting a session by name (tmux resolves it to that session's active pane).
+func (c *commonFlags) targetSpec() (string, *cmdError) {
+	if c.pane != "" && c.session != "" {
+		return "", &cmdError{class: "usage",
+			message: "--pane and --session are mutually exclusive",
+			hint:    "use --session <name> to target a session, or --pane <target> for a specific pane/window", exit: ExitUsage}
+	}
+	if c.session != "" {
+		return c.session, nil
+	}
+	return c.pane, nil
+}
 
 // cmdError is a structured, user-facing command failure.
 type cmdError struct {
@@ -138,12 +158,12 @@ func fromTmuxErr(err error) *cmdError {
 // capturePane captures the target pane and builds a snapshot. tmux is invoked
 // once (with -e) and normalization derives the cleaned text, so raw and clean
 // come from a single, consistent capture.
-func capturePane(t tmux.Target, lines int) (*snapshot.Snapshot, *cmdError) {
+func capturePane(t tmux.Target, lines, scrollback int) (*snapshot.Snapshot, *cmdError) {
 	tmuxVer, err := tmux.Version()
 	if err != nil {
 		return nil, fromTmuxErr(err)
 	}
-	raw, err := tmux.Capture(t, tmux.CaptureOpts{Escapes: true, JoinWrapped: true, Scrollback: lines})
+	raw, err := tmux.Capture(t, tmux.CaptureOpts{Escapes: true, JoinWrapped: true, Scrollback: scrollback})
 	if err != nil {
 		return nil, fromTmuxErr(err)
 	}
@@ -207,6 +227,7 @@ Commands:
   telemetry   Inspect telemetry (telemetry show prints exactly what would be sent)
   bundle      Produce a sanitized diagnostic bundle for bug reports
   shim        Run a local credential-free fake LLM backend for a harness
+  update      Update muxray in place from the latest GitHub release (--check, --version)
   usage       Print the agent-facing calling contract (same as USAGE.md)
   version     Print the muxray version
 

@@ -171,6 +171,74 @@ func TestDetect_StateIsFooterBound(t *testing.T) {
 	}
 }
 
+// TestDetect_ClaudeReadyPromptIsIdle is the regression for the chat-reported bug
+// (job 272): the CURRENT Claude Code ready prompt — a "✻ Cooked for …" rested
+// spinner, the "❯" input box, and the permission-mode footer
+// "⏵⏵ <mode> on (shift+tab to cycle)" — was classified program=unknown because
+// the idle rule only knew the older "? for shortcuts" footer. The frame below is
+// the reported transcript, sanitized to generic content (muxray is public). It
+// includes tmux's window-name status line, which is why the signature matched on
+// the word "claude" while no state rule fired → the misleading unknown.
+func TestDetect_ClaudeReadyPromptIsIdle(t *testing.T) {
+	frame := "\n" +
+		"✻ Cooked for 13m 24s\n" +
+		"\n" +
+		"────────────────────────────────────────────────────────────────────────────\n" +
+		"❯ refactor the auth module and add tests\n" +
+		"────────────────────────────────────────────────────────────────────────────\n" +
+		"  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents\n" +
+		"\n\n" +
+		"[default] 0:claude*                                            \"✳ edit config\" 18:06 06-Jun-26\n"
+	clean := normalize.Clean(frame, 200).Clean
+	res := program.Detect(clean, false)
+	if res.Program != "claude" || res.Status != program.StatusIdle {
+		t.Fatalf("ready prompt: got %s/%s, want claude/idle", res.Program, res.Status)
+	}
+	if res.RuleID != "claude.idle" {
+		t.Errorf("ready prompt: got rule %q, want claude.idle", res.RuleID)
+	}
+}
+
+// TestDetect_ClaudeRecognizedWithoutBrandWord guards the signature addition: the
+// permission-mode footer alone ("shift+tab to cycle") identifies Claude even when
+// the capture omits the word "claude" entirely (a pane captured without tmux's
+// status line). Without the signature change this declines to no_program_signature.
+func TestDetect_ClaudeRecognizedWithoutBrandWord(t *testing.T) {
+	frame := "" +
+		"╭──────────────────────────────────────────────╮\n" +
+		"│ > write the migration                          │\n" +
+		"╰──────────────────────────────────────────────╯\n" +
+		"  ⏵⏵ accept edits on (shift+tab to cycle)\n"
+	if strings.Contains(strings.ToLower(frame), "claude") {
+		t.Fatal("test premise broken: frame must not contain the word claude")
+	}
+	clean := normalize.Clean(frame, 200).Clean
+	res := program.Detect(clean, false)
+	if res.Program != "claude" || res.Status != program.StatusIdle {
+		t.Fatalf("brandless ready prompt: got %s/%s, want claude/idle", res.Program, res.Status)
+	}
+}
+
+// TestDetect_DeclineReasonIsDistinct guards the match_source diagnosability fix:
+// the two decline paths must report different reasons so an unknown is debuggable
+// from the result alone, without --explain. A frame that mentions a harness but
+// shows no live state declines with no_state_match; truly unrecognized text
+// declines with no_program_signature.
+func TestDetect_DeclineReasonIsDistinct(t *testing.T) {
+	// Claude named in scrolled content, but the footer shows no live state.
+	noState := "Claude Code session log\n" + strings.Repeat("  some scrolled prose line\n", 14)
+	if res := program.Detect(noState, false); res.Program != "unknown" || res.MatchSource != "no_state_match" {
+		t.Errorf("harness-named, no live state: got program=%s match_source=%q, want unknown/no_state_match",
+			res.Program, res.MatchSource)
+	}
+	// No harness recognized at all.
+	noSig := "just some unrelated terminal output\nnothing to see here\n"
+	if res := program.Detect(noSig, false); res.Program != "unknown" || res.MatchSource != "no_program_signature" {
+		t.Errorf("unrecognized text: got program=%s match_source=%q, want unknown/no_program_signature",
+			res.Program, res.MatchSource)
+	}
+}
+
 // TestExplainTrace verifies the parser trace is populated when explain is on and
 // records both matched and unmatched rules (explainability contract).
 func TestExplainTrace(t *testing.T) {

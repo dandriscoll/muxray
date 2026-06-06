@@ -16,6 +16,15 @@ func claudeAdapter() adapter {
 				"cogitating", "pondering", "herding", "ruminating", "schlepping", "noodling") {
 				return 2
 			}
+			// Claude-distinctive ready-prompt footer: the permission-mode line
+			// ("⏵⏵ bypass permissions on (shift+tab to cycle)") that Claude shows
+			// whenever it is idle and waiting for input. The "shift+tab to cycle"
+			// mode-switch hint is specific to Claude Code, so it identifies the
+			// harness even when the capture omits the word "claude" (e.g. the pane
+			// is captured without tmux's window-name status line).
+			if containsAny(lower, "shift+tab to cycle") {
+				return 2
+			}
 			// Generic UI hints shared with other harnesses (weak).
 			if containsAny(lower, "esc to interrupt", "? for shortcuts") {
 				return 1
@@ -50,6 +59,13 @@ func claudeAdapter() adapter {
 			),
 			phraseRule("claude.idle", StatusIdle, 0.5,
 				"? for shortcuts", "/help for help", "try \"",
+				// The current Claude Code ready prompt no longer shows
+				// "? for shortcuts" at rest; it shows the permission-mode footer
+				// ("⏵⏵ <mode> on (shift+tab to cycle)") above the input box while
+				// it waits for the next instruction. A running frame carries
+				// "esc to interrupt" and is caught by claude.running above, which
+				// is checked first, so this only fires when the pane is at rest.
+				"shift+tab to cycle",
 			),
 		},
 	}

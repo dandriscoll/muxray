@@ -97,8 +97,15 @@ func Detect(clean string, explain bool) Result {
 	footerLower := strings.ToLower(footer)
 	var trace []TraceEntry
 
-	declined := func() Result {
-		res := Result{Program: "unknown", Status: StatusUnknown, MatchSource: "no_program_signature", Confidence: 0}
+	// declined returns the first-class unknown result. The reason distinguishes
+	// the two ways muxray declines so the match_source field alone diagnoses an
+	// unknown without needing --explain: "no_program_signature" means no harness
+	// was recognized at all; "no_state_match" means a harness WAS recognized but
+	// its footer showed no live state muxray maps (the pane mentions a harness but
+	// is not a confidently-live frame — a transcript, scrolled output, or a TUI
+	// state muxray does not yet model).
+	declined := func(reason string) Result {
+		res := Result{Program: "unknown", Status: StatusUnknown, MatchSource: reason, Confidence: 0}
 		if explain {
 			res.Trace = trace
 		}
@@ -148,7 +155,7 @@ func Detect(clean string, explain bool) Result {
 		}
 	}
 	if chosen < 0 {
-		return declined()
+		return declined("no_program_signature")
 	}
 
 	// Step 2: read the current state from the FOOTER using the chosen program's
@@ -180,7 +187,7 @@ func Detect(clean string, explain bool) Result {
 		}
 	}
 	if !fired {
-		return declined()
+		return declined("no_state_match")
 	}
 	if explain {
 		best.Trace = trace

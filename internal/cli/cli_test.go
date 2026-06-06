@@ -100,12 +100,83 @@ func TestStatusBoundsToVisibleScreen(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &resp); err != nil {
 		t.Fatalf("parse status JSON: %v\n%s", err, out)
 	}
-	// The current screen is a plain shell — none of Claude/Codex/Copilot. muxray
-	// must DECLINE (program=unknown, status=unknown) and let the agent parse it,
-	// rather than reporting the historical error scrolled off the top (issue #2).
-	if resp.Classification.Program != "unknown" || resp.Classification.Status != "unknown" {
-		t.Errorf("muxray commented on an unrecognized current screen (should be unknown/unknown): got program=%q status=%q",
+	// The historical Claude error has scrolled off the top; the visible footer is
+	// a shell prompt. The issue-#2 invariant is that muxray must NOT report the
+	// stale error: it must not say claude, and it must not say error. (Depending
+	// on the shell's prompt shape it now resolves to shell/idle on a recognized
+	// prompt, or unknown on a bare one — either satisfies #2. The deterministic
+	// shell/idle path is covered by TestStatusShellAfterDisconnect.)
+	if resp.Classification.Program == "claude" || resp.Classification.Status == "error" {
+		t.Errorf("muxray surfaced the scrolled-off historical error (issue #2): got program=%q status=%q",
 			resp.Classification.Program, resp.Classification.Status)
+	}
+}
+
+// TestStatusShellAfterDisconnect is the regression for this job: a websocket /
+// incus-VM disconnect drops the user back to the shell, leaving harness
+// scrollback + a transport-closure error above a fresh shell prompt. muxray must
+// classify the pane as shell/idle (the harness is no longer live) — NOT as a
+// Claude error. PS1 is pinned so the footer prompt is a deterministic, recognized
+// shape across machines/CI.
+func TestStatusShellAfterDisconnect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping tmux-backed test in -short mode")
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	session := "muxray-disco-" + strconv.Itoa(os.Getpid())
+	// Spawn a no-rc/no-profile bash as the pane command so no prompt framework
+	// (Starship, powerlevel10k, oh-my-zsh) is loaded to override PS1 — the pinned
+	// prompt below is then honored deterministically across machines and CI.
+	if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "120", "-y", "40", "bash", "--norc", "--noprofile").CombinedOutput(); err != nil {
+		t.Skipf("could not start tmux session (%v): %s", err, out)
+	}
+	defer exec.Command("tmux", "kill-session", "-t", session).Run()
+
+	send := func(line string) {
+		if out, err := exec.Command("tmux", "send-keys", "-t", session, line, "Enter").CombinedOutput(); err != nil {
+			t.Fatalf("send-keys %q: %v: %s", line, err, out)
+		}
+	}
+	// Pin a recognizable user@host:path prompt so the assertion does not depend on
+	// the runner's ambient prompt shape.
+	send(`export PROMPT_COMMAND=; PS1='dev@vm:/srv/app\$ '`)
+	// Simulate the disconnect: a Claude line, then the websocket closure error.
+	// The shell then redraws the (pinned) prompt as the footer.
+	send(`printf 'Claude\n  Error: websocket: close 1006 (abnormal closure): unexpected EOF\n'; echo "MUXRDY"2`)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		out, _ := exec.Command("tmux", "capture-pane", "-p", "-t", session).CombinedOutput()
+		if strings.Contains(string(out), "MUXRDY2") && strings.Contains(string(out), "dev@vm:/srv/app$") {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	// Confirm PS1 actually took (some minimal shells ignore it); otherwise the
+	// runtime can't exercise the contract and we skip rather than false-fail.
+	cap, _ := exec.Command("tmux", "capture-pane", "-p", "-t", session).CombinedOutput()
+	if !strings.Contains(string(cap), "dev@vm:/srv/app$") {
+		t.Skip("shell did not adopt pinned PS1; cannot exercise prompt-shape end-to-end")
+	}
+
+	out, errOut, code := run("status", "--pane", session, "--json")
+	if code != ExitOK {
+		t.Fatalf("status exit=%d stderr=%s", code, errOut)
+	}
+	var resp struct {
+		Classification struct {
+			Program string `json:"program"`
+			Status  string `json:"status"`
+			RuleID  string `json:"rule_id"`
+		} `json:"classification"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("parse status JSON: %v\n%s", err, out)
+	}
+	if resp.Classification.Program != "shell" || resp.Classification.Status != "idle" {
+		t.Errorf("disconnect-to-shell should be shell/idle, got program=%q status=%q rule=%q\n%s",
+			resp.Classification.Program, resp.Classification.Status, resp.Classification.RuleID, out)
 	}
 }
 

@@ -1,5 +1,11 @@
-user@host:~/project$ ls -la
-total 24
-drwxr-xr-x  5 user user 4096 Jun  5 03:10 .
--rw-r--r--  1 user user 1068 Jun  5 03:09 LICENSE
-user@host:~/project$
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("hi")
+}
+~
+~
+~
+"main.go" [readonly] 7L, 78B

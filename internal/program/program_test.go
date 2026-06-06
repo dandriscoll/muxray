@@ -154,16 +154,20 @@ func TestDetect_StateIsFooterBound(t *testing.T) {
 	}
 
 	// B) A shell that merely DISPLAYS muxray's output (mentions Claude/Codex/Copilot
-	//    and "Error:") with a shell prompt as its footer. muxray must DECLINE — it is
-	//    not a live harness frame. (This is the cap.json class from issue #4.)
+	//    and "Error:") with a shell prompt as its footer. muxray must NOT report the
+	//    harness error from the displayed JSON (the cap.json class from issue #4);
+	//    the live footer is a shell prompt, so the pane is a shell at rest →
+	//    shell/idle (it used to decline to unknown/unknown; a recognized shell is a
+	//    first-class idle state now). The load-bearing guarantee is unchanged: the
+	//    scrolled claude/error is not surfaced.
 	shell := "$ muxray inspect dan\n" +
 		"  \"classification\": { \"program\": \"claude\", \"status\": \"error\" },\n" +
 		"  \"evidence\": \"Error: something failed\",\n" +
 		"  status   Classify the program state (Claude/Codex/Copilot, or unknown)\n" +
 		pad("  \"key\": \"value\",", 14) +
 		"user@host ~ $ \n"
-	if res := program.Detect(shell, false); res.Program != "unknown" || res.Status != program.StatusUnknown {
-		t.Errorf("B: shell displaying harness keywords: got %s/%s, want unknown/unknown", res.Program, res.Status)
+	if res := program.Detect(shell, false); res.Program != "shell" || res.Status != program.StatusIdle {
+		t.Errorf("B: shell displaying harness keywords: got %s/%s, want shell/idle", res.Program, res.Status)
 	}
 }
 

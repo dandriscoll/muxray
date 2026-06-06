@@ -105,6 +105,33 @@ func Detect(clean string, explain bool) Result {
 		return res
 	}
 
+	// Step 0: shell pre-check. If the footer ends at an interactive shell prompt,
+	// the harness is not live — the user has been returned to a shell (commonly a
+	// websocket / incus-VM disconnect that dumped them out of Claude/Codex). This
+	// is the footer-bound principle (issues #2/#4) applied to transport drops: a
+	// shell prompt at the bottom wins over any scrolled-up "error:" text, so a
+	// disconnect reads as shell/idle rather than an agent error.
+	if _, ev, ok := detectShell(footer); ok {
+		if explain {
+			trace = append(trace, TraceEntry{Program: "shell", RuleID: "shell.idle", Status: StatusIdle, Matched: true, Evidence: ev})
+		}
+		res := Result{
+			Program:     "shell",
+			Status:      StatusIdle,
+			RuleID:      "shell.idle",
+			MatchSource: "rule:shell.idle",
+			Confidence:  0.6,
+			Evidence:    ev,
+		}
+		if explain {
+			res.Trace = trace
+		}
+		return res
+	}
+	if explain {
+		trace = append(trace, TraceEntry{Program: "shell", RuleID: "shell.idle", Status: StatusIdle, Matched: false})
+	}
+
 	// Step 1: choose the program with the strongest signature. Brand matches
 	// (strength 2) always beat generic UI hints (strength 1); ties fall to
 	// adapter order.

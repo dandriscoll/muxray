@@ -1,0 +1,5 @@
+✻ Claude Code
+  ⎿ Read internal/program/program.go
+  I'll refactor the classifier now.
+  Error: websocket: close 1006 (abnormal closure): unexpected EOF
+ dev@host  /src/project   main

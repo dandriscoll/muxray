@@ -167,8 +167,10 @@ muxray inspect --pane %3
 ```
 
 `program` and `status` are the load-bearing fields. `program` is the program
-muxray recognized in the pane — `claude`, `codex`, `copilot`, or `unknown` for
-any pane it doesn't recognize (a plain shell, an editor, …). `rule_id` / `match_source`
+muxray recognized in the pane — `claude`, `codex`, `copilot`, `shell` (a pane
+sitting at an interactive shell prompt — e.g. the agent exited or a remote/VM
+connection dropped back to the shell; reported as `idle`), or `unknown` for any
+pane it doesn't recognize (an editor, a pager, …). `rule_id` / `match_source`
 and `evidence` make the classification **explainable** — pass `--explain` to get
 the full parser trace, including every rule considered and why a result was
 `unknown`.

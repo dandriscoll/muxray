@@ -36,16 +36,21 @@ if it isn't the version you coded against, the shape may have changed.
 ```
 
 - **`program`** — the program muxray recognized in the pane: `claude`, `codex`,
-  `copilot`, or `unknown` (any pane it doesn't recognize — a plain shell, an editor, …).
+  `copilot`, `shell` (the pane is at an interactive shell prompt — the harness is
+  not live; e.g. the agent exited or a remote/VM connection dropped back to the
+  shell — reported as `idle`), or `unknown` (any pane it doesn't recognize — an
+  editor, a pager, …).
 - **`status`** — one of: `idle`, `running`, `blocked`, `waiting_for_input`,
   `needs_approval`, `error`, `completed`, `unknown`.
 - Pass `--explain` to attach a `trace` of every rule considered (use it to diagnose an
   `unknown`).
-- muxray only reports a state for a **genuine live Claude/Codex/Copilot frame**: it
-  reads the current state from the harness's footer. A pane that merely *mentions* a
-  harness (a shell showing logs, a transcript, muxray's own output) returns
-  `program=unknown`/`status=unknown` — that means "not a recognized live frame, parse
-  it yourself," not "something failed."
+- muxray reports a state only for a **genuine live Claude/Codex/Copilot frame** or
+  for a **shell prompt**: it reads the current state from the footer. A pane that
+  merely *mentions* a harness in scrolled content (a transcript, muxray's own
+  output) returns `program=unknown`/`status=unknown` — "not a recognized live
+  frame, parse it yourself," not "something failed." A footer that is a shell
+  prompt returns `program=shell`/`status=idle`: a transport error or agent exit
+  that dropped to the shell is **not** an agent `error`.
 
 `diff` carries `changed` (bool — **both `true` and `false` are exit 0**; change is not
 an error), `summary`, `added` / `removed` / `context` line arrays, `hunks`, and the
@@ -56,7 +61,8 @@ an error), `summary`, `added` / `removed` / `context` line arrays, `hunks`, and 
 1. Each tick, `muxray status --pane <t>` and branch on `status`:
    - `needs_approval` / `waiting_for_input` → hand off to a human;
    - `error` → restart or alert;
-   - `completed` / `idle` → assign the next task;
+   - `completed` / `idle` → assign the next task (if `program=shell` the pane
+     dropped to a shell — relaunch the agent rather than assigning to a live one);
    - `running` → keep waiting.
 2. To detect change cheaply: `muxray snapshot --pane <t> --out before.json`, let the
    program work, then `muxray diff --pane <t> --since before.json` (or `muxray diff`

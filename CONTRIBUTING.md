@@ -7,11 +7,23 @@ agents. Contributions that keep it small, deterministic, and honest are very wel
 ## Build and test
 
 ```sh
-make build        # build ./muxray
-make test         # full suite (uses a real tmux if one is on PATH)
-make test-short   # skip the tmux integration + mock-harness layers
-make lint         # gofmt check + go vet
+make build         # build ./muxray
+make test          # full suite (uses a real tmux if one is on PATH)
+make test-short    # skip the tmux integration + mock-harness layers
+make lint          # gofmt check + go vet
+make release-check VERSION=vX.Y.Z   # pre-release: validate the curl|sh install path
 ```
+
+## Cutting a release
+
+`muxray` releases on a pushed `v*` tag (`.github/workflows/release.yml`). Before
+tagging, `make release-check VERSION=vX.Y.Z` validates that the advertised
+`curl | sh` install path is internally consistent (curl URL, install.sh ↔
+build-release.sh artifact names, platform matrix, and that a binary built with the
+tag reports it). It runs automatically as a prerequisite of `make release` and in
+the release workflow. **Step zero of announcing** a release: after the tag's
+release is published, run `scripts/release-check.sh vX.Y.Z --online` to confirm
+the GitHub release exists and a real `curl | sh` install succeeds.
 
 The default `go test ./...` lane is deterministic and network-free; the
 tmux-dependent layers run when tmux is present and skip cleanly when it is not (or

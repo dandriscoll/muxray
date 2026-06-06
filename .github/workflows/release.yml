@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Release-check (install-path gate, issue #6)
+        run: ./scripts/release-check.sh "${GITHUB_REF_NAME}"
       - name: Build release artifacts
         run: ./scripts/build-release.sh "${GITHUB_REF_NAME}"
       - name: Publish release

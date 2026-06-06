@@ -33,12 +33,6 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 		t.Skip("tmux not installed; skipping mock-harness test")
 	}
 
-	session := "muxray-harness-" + strconv.Itoa(os.Getpid())
-	if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "120", "-y", "40").CombinedOutput(); err != nil {
-		t.Skipf("could not start tmux session (%v): %s", err, out)
-	}
-	defer exec.Command("tmux", "kill-session", "-t", session).Run()
-
 	steps := []struct {
 		name        string
 		lines       []string
@@ -54,20 +48,29 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 
 	for i, s := range steps {
 		t.Run(s.name, func(t *testing.T) {
-			// Render the screen, then print a readiness sentinel from a SEPARATE
-			// command. Two properties make this race-free and side-effect-free:
-			//   1. The sentinel is split with a quote (echo "MUXRDY"<i>) so the
-			//      contiguous token appears only in the command's OUTPUT, never in
-			//      the typed command echo — so waitFor fires after the screen is
-			//      actually drawn and the prior step cleared, not while the next
-			//      command is merely echoed.
-			//   2. The token is a unique, word-free string (MUXRDY<i>) so it never
-			//      collides with a program rule phrase (e.g. "done").
+			// Each step gets its own session (isolation, no cross-step bleed).
+			session := "muxray-harness-" + strconv.Itoa(os.Getpid()) + "-" + strconv.Itoa(i)
+			if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "120", "-y", "40").CombinedOutput(); err != nil {
+				t.Skipf("could not start tmux session (%v): %s", err, out)
+			}
+			defer exec.Command("tmux", "kill-session", "-t", session).Run()
+
+			// Render the harness screen, then HOLD it in the foreground with
+			// `sleep` so the shell never draws a prompt below the content. This
+			// makes the captured pane a genuine LIVE harness frame whose footer is
+			// the harness's own output — not a returned-to-shell prompt, which
+			// muxray now (correctly) classifies as shell/idle. Without the hold the
+			// trailing shell prompt is captured nondeterministically (it raced
+			// green locally and red in CI). A readiness sentinel is echoed last;
+			// it is a unique, word-free token (MUXRDY<i>) that matches no program
+			// rule and is not a shell-prompt shape, so it neither perturbs the
+			// classification nor trips shell detection. It is quote-split
+			// (echo "MUXRDY"<i>) so the contiguous token appears only in OUTPUT,
+			// never in the typed command echo.
 			payload := strings.Join(s.lines, `\n`) + `\n`
 			ready := "MUXRDY" + strconv.Itoa(i)
 			sendKeys(t, session, "clear")
-			sendKeys(t, session, "printf '"+payload+"'")
-			sendKeys(t, session, `echo "MUXRDY"`+strconv.Itoa(i))
+			sendKeys(t, session, "printf '"+payload+"'; echo \"MUXRDY\""+strconv.Itoa(i)+"; sleep 30")
 			if !waitFor(t, session, ready) {
 				t.Fatalf("pane never showed readiness sentinel %q", ready)
 			}

@@ -15,6 +15,8 @@ secrets) never leaves the machine.
 | ------- | ------------ |
 | `muxray list` | every tmux session/window/pane, structured |
 | `muxray status --pane <t>` | the program + state classified for that pane |
+| `muxray scan` | **every** pane classified in one call (the fleet view) |
+| `muxray watch --pane <t> [--until <states>]` | **block** until the pane reaches a target state |
 | `muxray snapshot --pane <t>` | capture the pane (stored locally; `--out <file>` to also write one) |
 | `muxray diff --pane <t> [--since <file\|id>]` | what changed vs a previous snapshot |
 | `muxray inspect --pane <t>` | snapshot + diff + status in one call |
@@ -56,18 +58,32 @@ if it isn't the version you coded against, the shape may have changed.
 an error), `summary`, `added` / `removed` / `context` line arrays, `hunks`, and the
 `previous_snapshot` / `current_snapshot` ids.
 
-## The poll loop (typical use)
+## The control loop (typical use)
 
-1. Each tick, `muxray status --pane <t>` and branch on `status`:
-   - `needs_approval` / `waiting_for_input` → hand off to a human;
-   - `error` → restart or alert;
-   - `completed` / `idle` → assign the next task (if `program=shell` the pane
-     dropped to a shell — relaunch the agent rather than assigning to a live one);
-   - `running` → keep waiting.
-2. To detect change cheaply: `muxray snapshot --pane <t> --out before.json`, let the
-   program work, then `muxray diff --pane <t> --since before.json` (or `muxray diff`
-   against the latest stored snapshot). `changed: false` is deterministic and
-   reproducible across machines (the hash is over cleaned text only).
+Two verbs ARE the loop — you don't have to hand-roll poll+sleep+compare:
+
+1. **Wait until it's your turn.** `muxray watch --pane <t>` blocks until the pane
+   stops working, then prints the final `classification` and exits 0:
+   - default `--until` = any non-`running` "settled" state (`idle`, `completed`,
+     `needs_approval`, `waiting_for_input`, `blocked`, `error`); it keeps waiting
+     through `running` and a transient `unknown`.
+   - narrow it: `--until idle,needs_approval` returns only on those.
+   - bound it: `--timeout 5m` exits **5** if the pane never settles (the final
+     classification is still emitted, so you learn the last-seen state).
+   - `--interval` sets the poll cadence (floored at 200ms).
+   - Then branch on the final `status`: `needs_approval`/`waiting_for_input` → hand
+     off to a human; `error` → restart/alert; `idle`/`completed` → assign the next
+     task (if `program=shell` the pane dropped to a shell — relaunch rather than
+     assign to a live one).
+2. **See the whole fleet at once.** `muxray scan` classifies every pane in one
+   call → `{ "panes": [ { "target": "%3", "session": …, "classification": {…} } … ] }`.
+   `target` is the pane id (`%N`) — feed it straight back into `status`/`watch`/`diff`.
+   `--text` gives one line per pane for a human glance. A pane that can't be read is
+   reported `unknown` with an `error` class rather than failing the whole scan.
+3. **Detect change cheaply (when you need the diff, not just the state):**
+   `muxray snapshot --pane <t> --out before.json`, let the program work, then
+   `muxray diff --pane <t> --since before.json`. `changed: false` is deterministic
+   and reproducible across machines (the hash is over cleaned text only).
 
 ## Pane targets (`--pane` / `--session`)
 
@@ -79,8 +95,9 @@ session by name, `--session <name>` is a clearer equivalent (mutually exclusive 
 ## Exit codes
 
 `0` ok (including `changed:true`/`false`) · `1` internal · `2` usage · `3` tmux/capture
-· `4` snapshot not found. On failure, stderr carries a JSON object whose `error.class`
-is a stable, branchable identifier and whose `error.hint` names the next action.
+· `4` snapshot not found · `5` `watch` timed out before the pane reached a target state.
+On failure, stderr carries a JSON object whose `error.class` is a stable, branchable
+identifier and whose `error.hint` names the next action.
 
 ## Keeping muxray current
 

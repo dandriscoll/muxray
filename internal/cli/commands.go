@@ -324,15 +324,10 @@ func cmdStatus(args []string) int {
 	if perr != nil {
 		return emitError(wantJSON, "status", fromTmuxErr(perr))
 	}
-	// Classify the VISIBLE screen only (no scrollback): an agent TUI's current
-	// state is the current frame. Reading scrollback would let a stale error that
-	// has scrolled off the top of the pane be classified as the present state
-	// (issue #2 — historical error misclassified).
-	snap, cerr := capturePane(target, c.lines, 0)
+	result, snap, cerr := classifyParsed(target, c.lines, c.explain)
 	if cerr != nil {
 		return emitError(wantJSON, "status", cerr)
 	}
-	result := program.Detect(snap.Clean, c.explain)
 	resp := statusResponse{
 		Envelope:       schema.NewEnvelope("status", version.Version),
 		Target:         target,
@@ -579,6 +574,19 @@ func cmdBundle(args []string) int {
 }
 
 // ---- shared small helpers ----
+
+// classifyParsed captures the VISIBLE screen of an already-parsed target and
+// classifies it. Visible-screen-only (scrollback=0) keeps classification
+// footer-bound: a stale error scrolled above the visible frame is not reported as
+// the present state (issue #2). Shared by status, scan, and watch so all three
+// classify a pane identically.
+func classifyParsed(target tmux.Target, lines int, explain bool) (program.Result, *snapshot.Snapshot, *cmdError) {
+	snap, cerr := capturePane(target, lines, 0)
+	if cerr != nil {
+		return program.Result{}, nil, cerr
+	}
+	return program.Detect(snap.Clean, explain), snap, nil
+}
 
 func recordEvent(e telemetry.Event, debug bool, start time.Time) {
 	e.MuxrayVersion = version.Version

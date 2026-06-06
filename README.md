@@ -123,6 +123,12 @@ muxray list
 # Classify what the agent in a pane is doing
 muxray status --pane work:1.0
 
+# Classify EVERY pane in one call (the fleet view; --text for a quick glance)
+muxray scan --text
+
+# Block until that pane is free / needs you, then act on the final state
+muxray watch --pane work:1.0 --until idle,needs_approval --timeout 10m
+
 # Snapshot a pane, do other things, then see what changed
 muxray snapshot --pane %3
 muxray diff --pane %3            # compares against the latest stored snapshot
@@ -231,6 +237,8 @@ reproducible across machines.
 | `muxray snapshot`  | Capture a pane to the local store and/or `--out <file>`        |
 | `muxray diff`      | Compare current pane against a previous snapshot (`--since`)   |
 | `muxray status`    | Classify program state for the pane                            |
+| `muxray scan`      | Classify **every** pane in one call (the fleet view)          |
+| `muxray watch`     | Block until a pane reaches a target state (`--until`)         |
 | `muxray inspect`   | Snapshot + diff + status in one call                           |
 | `muxray doctor`    | Report environment/tooling diagnostics                         |
 | `muxray telemetry` | `telemetry show` prints exactly what telemetry would be sent   |
@@ -245,8 +253,8 @@ to `--pane`), `--json` (default), `--text`, `--lines N` (history cap, default 20
 `--debug`. Run `muxray <command> -h` for command-specific flags.
 
 **Exit codes:** `0` ok · `1` internal · `2` usage · `3` tmux/capture · `4`
-snapshot not found. `changed: true`/`false` are **both** exit `0` — change is not
-an error. Errors are emitted as structured JSON on stderr with a `class` and a
+snapshot not found · `5` `watch` timed out. `changed: true`/`false` are **both**
+exit `0` — change is not an error. Errors are emitted as structured JSON on stderr with a `class` and a
 `hint`, and tmux failures are never silently swallowed.
 
 ---

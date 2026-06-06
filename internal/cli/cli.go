@@ -27,6 +27,7 @@ const (
 	ExitUsage    = 2 // bad flags / unknown command
 	ExitTmux     = 3 // tmux missing / capture failure
 	ExitNotFound = 4 // referenced snapshot not found
+	ExitTimeout  = 5 // 'watch' gave up before the pane reached a target state
 )
 
 // stdout/stderr are indirected for testability.
@@ -51,6 +52,10 @@ func Run(args []string) int {
 		return cmdDiff(rest)
 	case "status":
 		return cmdStatus(rest)
+	case "scan":
+		return cmdScan(rest)
+	case "watch":
+		return cmdWatch(rest)
 	case "inspect":
 		return cmdInspect(rest)
 	case "doctor":
@@ -222,6 +227,8 @@ Commands:
   snapshot    Capture a pane snapshot (stored locally; --out to also write a file)
   diff        Compare the current pane against a previous snapshot (--since)
   status      Classify the program state (Claude/Codex/Copilot, or unknown) of a pane
+  scan        Classify EVERY pane in one call (the fleet view; --text for a glance)
+  watch       Block until a pane reaches a target state (--until); the poll loop in one call
   inspect     Snapshot + diff + status in one call
   doctor      Report environment/tooling diagnostics
   telemetry   Inspect telemetry (telemetry show prints exactly what would be sent)
@@ -239,8 +246,14 @@ Common flags:
   --debug           write a local diagnostic event to the debug log
 
 Exit codes: 0 ok · 1 internal · 2 usage · 3 tmux/capture · 4 snapshot not found
+            · 5 watch timed out (pane never reached the target state)
 
 JSON is the default output. Program parsing degrades to status "unknown" rather
 than failing. See 'muxray <command> -h' for command-specific flags.
+
+Examples:
+  muxray scan --text                       # every pane and what it's doing
+  muxray watch --pane work --until idle    # block until that pane is free
+  muxray watch --pane work --timeout 5m    # ...or give up after 5m (exit 5)
 `)
 }

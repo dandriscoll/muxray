@@ -40,7 +40,7 @@ func TestHelp(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("exit=%d", code)
 	}
-	for _, cmd := range []string{"list", "snapshot", "diff", "status", "inspect", "doctor", "usage"} {
+	for _, cmd := range []string{"list", "snapshot", "diff", "status", "scan", "watch", "inspect", "doctor", "usage"} {
 		if !strings.Contains(out, cmd) {
 			t.Errorf("help missing command %q", cmd)
 		}
@@ -177,6 +177,101 @@ func TestStatusShellAfterDisconnect(t *testing.T) {
 	if resp.Classification.Program != "shell" || resp.Classification.Status != "idle" {
 		t.Errorf("disconnect-to-shell should be shell/idle, got program=%q status=%q rule=%q\n%s",
 			resp.Classification.Program, resp.Classification.Status, resp.Classification.RuleID, out)
+	}
+}
+
+// TestScanClassifiesAllPanes is the scan E2E (CI; skipped under -short): scan must
+// return every pane in one call, each carrying a classification, with the test
+// session present. Uses the default tmux server like the other tmux-backed tests.
+func TestScanClassifiesAllPanes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping tmux-backed test in -short mode")
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	session := "muxray-scan-" + strconv.Itoa(os.Getpid())
+	if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "100", "-y", "30").CombinedOutput(); err != nil {
+		t.Skipf("could not start tmux session (%v): %s", err, out)
+	}
+	defer exec.Command("tmux", "kill-session", "-t", session).Run()
+
+	out, errOut, code := run("scan", "--json")
+	if code != ExitOK {
+		t.Fatalf("scan exit=%d stderr=%s", code, errOut)
+	}
+	var resp struct {
+		PaneCount int `json:"pane_count"`
+		Panes     []struct {
+			Session        string `json:"session"`
+			Target         string `json:"target"`
+			Classification struct {
+				Program string `json:"program"`
+				Status  string `json:"status"`
+			} `json:"classification"`
+		} `json:"panes"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("parse scan JSON: %v\n%s", err, out)
+	}
+	if resp.PaneCount < 1 || len(resp.Panes) != resp.PaneCount {
+		t.Fatalf("scan returned %d panes (len=%d)", resp.PaneCount, len(resp.Panes))
+	}
+	found := false
+	for _, p := range resp.Panes {
+		if p.Target == "" || p.Classification.Status == "" {
+			t.Errorf("pane missing target/status: %+v", p)
+		}
+		if p.Session == session {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("scan did not include the test session %q", session)
+	}
+}
+
+// TestWatchReturnsWhenSettled is the watch E2E (CI; skipped under -short): a pane
+// sitting at a shell prompt is already "settled" (status idle), so
+// `watch --until idle` returns promptly with outcome=reached and exit 0.
+func TestWatchReturnsWhenSettled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping tmux-backed test in -short mode")
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+	session := "muxray-watch-" + strconv.Itoa(os.Getpid())
+	if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "100", "-y", "30", "bash", "--norc", "--noprofile").CombinedOutput(); err != nil {
+		t.Skipf("could not start tmux session (%v): %s", err, out)
+	}
+	defer exec.Command("tmux", "kill-session", "-t", session).Run()
+	// Pin a recognizable prompt so the pane classifies as shell/idle deterministically.
+	exec.Command("tmux", "send-keys", "-t", session, `export PROMPT_COMMAND=; PS1='dev@vm:/srv\$ '; clear`, "Enter").Run()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		cap, _ := exec.Command("tmux", "capture-pane", "-p", "-t", session).CombinedOutput()
+		if strings.Contains(string(cap), "dev@vm:/srv$") {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	out, errOut, code := run("watch", "--pane", session, "--until", "idle", "--interval", "200ms", "--timeout", "10s", "--json")
+	if code != ExitOK {
+		t.Fatalf("watch exit=%d stderr=%s out=%s", code, errOut, out)
+	}
+	var resp struct {
+		Outcome        string `json:"outcome"`
+		Classification struct {
+			Status string `json:"status"`
+		} `json:"classification"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("parse watch JSON: %v\n%s", err, out)
+	}
+	if resp.Outcome != "reached" || resp.Classification.Status != "idle" {
+		t.Errorf("watch on a settled pane: outcome=%q status=%q, want reached/idle", resp.Outcome, resp.Classification.Status)
 	}
 }
 

@@ -88,7 +88,7 @@ func dirWritable(dir string) bool {
 	if dir == "" {
 		return false
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil { // user-private state dir (issue #5)
 		return false
 	}
 	f, err := os.CreateTemp(dir, ".muxray-writecheck-*")

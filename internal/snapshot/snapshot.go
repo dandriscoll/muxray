@@ -107,6 +107,16 @@ func sanitize(s string) string {
 	}, s)
 }
 
+// Snapshots persist raw captured pane content, which can contain anything on the
+// user's screen (API keys, tokens, source, PII). They are therefore written
+// user-private so another local user on a shared host cannot read them (issue
+// #5). On Windows these Unix mode bits are largely a no-op; the guarantee is for
+// POSIX hosts.
+const (
+	fileMode fs.FileMode = 0o600
+	dirMode  fs.FileMode = 0o700
+)
+
 // Save writes the snapshot under dir (DefaultDir when empty) and returns the
 // path written.
 func Save(s *Snapshot, dir string) (string, error) {
@@ -114,7 +124,7 @@ func Save(s *Snapshot, dir string) (string, error) {
 		dir = DefaultDir()
 	}
 	d := filepath.Join(dir, TargetKey(s.Target))
-	if err := os.MkdirAll(d, 0o755); err != nil {
+	if err := os.MkdirAll(d, dirMode); err != nil {
 		return "", fmt.Errorf("create snapshot directory %s: %w", d, err)
 	}
 	path := filepath.Join(d, s.ID+".json")
@@ -124,16 +134,39 @@ func Save(s *Snapshot, dir string) (string, error) {
 	return path, nil
 }
 
-// WriteFile serializes a snapshot to an explicit path (the --out destination).
+// WriteFile serializes a snapshot to an explicit path (the --out destination),
+// written user-private (0600).
 func WriteFile(s *Snapshot, path string) error {
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
-	if err := os.WriteFile(path, b, 0o644); err != nil {
+	if err := writeFile0600(path, b); err != nil {
 		return fmt.Errorf("write snapshot %s: %w", path, err)
 	}
 	return nil
+}
+
+// writeFile0600 writes b to path with mode 0600, FORCING the mode even when path
+// already exists — os.WriteFile's perm argument is ignored for an existing file,
+// so a pre-existing world-readable destination (a re-used --out path, or a
+// re-saved snapshot id) would otherwise keep its looser mode. Chmod runs before
+// the content is written so the file is never readable with content at a looser
+// mode.
+func writeFile0600(path string, b []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMode)
+	if err != nil {
+		return err
+	}
+	if err := f.Chmod(fileMode); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // Load reads and parses a snapshot file.

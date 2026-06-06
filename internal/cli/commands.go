@@ -558,7 +558,14 @@ func cmdBundle(args []string) int {
 
 	if *out != "" {
 		data, _ := jsonMarshalIndent(resp)
-		if err := os.WriteFile(*out, data, 0o644); err != nil {
+		// User-private (0600): the bundle may carry an opt-in pane excerpt. Force
+		// the mode even when --out pre-exists (os.WriteFile's perm is ignored for
+		// an existing file) — the issue-#5 class.
+		err := os.WriteFile(*out, data, 0o600)
+		if err == nil {
+			err = os.Chmod(*out, 0o600)
+		}
+		if err != nil {
 			return emitError(wantJSON, "bundle", &cmdError{class: "write_error", message: err.Error(),
 				hint: "check that --out is writable", exit: ExitInternal})
 		}

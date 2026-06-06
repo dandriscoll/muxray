@@ -214,7 +214,10 @@ muxray diff --pane %3                           # or against the latest stored s
 ```
 
 Snapshots are stored under `${XDG_STATE_HOME:-~/.local/state}/muxray/snapshots`.
-The **content hash** is computed over the *cleaned* text only (no timestamp, no
+Because pane output can hold secrets, snapshot files are written user-private
+(`0600`) under `0700` directories — including the `--out` destination — so other
+local users on a shared host cannot read them (Unix mode bits; a no-op on
+Windows). The **content hash** is computed over the *cleaned* text only (no timestamp, no
 id), so the same pane content always hashes the same — `changed: false` is
 reproducible across machines.
 

@@ -1,4 +1,4 @@
-// Command muxray reads tmux sessions/panes and adapts their output for LLM
+// Command muxray reads tmux sessions/panes as deterministic JSON for LLM
 // agents: structured listing, snapshotting, change diffing, and deterministic
 // program-state classification for Claude, Codex, and Copilot.
 package main

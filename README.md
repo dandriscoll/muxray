@@ -1,6 +1,11 @@
 # muxray
 
-**Read tmux panes and adapt their output for LLM agents.**
+**muxray reads live tmux panes as deterministic JSON so an agent's control loop
+knows what each pane is doing — without scraping terminal bytes.**
+
+Stop scraping raw ANSI bytes and pattern-matching a moving TUI on every poll:
+muxray turns each pane into one stable contract your loop can branch on — what's
+in it, whether it changed since you last looked, and what the agent is doing.
 
 `muxray` is a single, zero-dependency Go binary that makes the contents of tmux
 panes legible to an LLM or coding agent. Its primary consumer is not a human at a
@@ -49,6 +54,15 @@ complete parser trace.)*
 **Is this for you?** If you drive Claude/Codex/Copilot — or any TUI — inside tmux
 from your own loop and need to know *what changed* and *what the agent is doing*,
 yes. If you just want to read your own terminal by hand, you probably don't need it.
+
+**Try it in 2 minutes:** [install](#install), then run
+`muxray status --pane <your agent's pane>` — or `muxray scan --text` to classify
+every pane at once.
+
+- **Wiring an orchestrator?** A few lines poll `status`/`diff` per pane — see
+  [Use it with your orchestrator](#use-it-with-your-orchestrator).
+- **Want to contribute?** Teaching muxray a new program state is a good first PR —
+  see [Contributing a program fixture](#contributing-a-program-fixture).
 
 ---
 

@@ -217,7 +217,7 @@ func flagError(command string, jsonOut bool, err error) int {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprint(w, `muxray — read tmux panes and adapt them for LLM agents
+	fmt.Fprint(w, `muxray — read tmux panes as deterministic JSON for LLM agents
 
 Usage:
   muxray <command> [flags]

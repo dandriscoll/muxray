@@ -70,6 +70,35 @@ func containsHarnessHint(footerLower string) bool {
 	return false
 }
 
+// privateUse reports whether r is in a Unicode Private Use Area. Powerline
+// themes (Starship, powerlevel10k) and Nerd Fonts render prompt SEPARATORS and
+// icons from these ranges — e.g. the powerline arrow U+E0B0 between the
+// user@host segment and the path, a distro icon as the leading glyph, the
+// git-branch glyph U+E0A0 before the branch name. tmux capture-pane preserves
+// these bytes, so a real shell prompt arrives decorated with runes the
+// prompt-shape matchers treat as opaque non-separators, defeating recognition.
+// Nothing standard lives in these ranges — box-drawing is U+2500-block and the
+// ❯/➜/»/❮ prompt glyphs are U+276F/279C/00BB/276E — so folding PUA runes to
+// spaces is safe: it cannot eat a box border, eat a leading glyph, or
+// manufacture a user@host/path shape out of an agent frame.
+func privateUse(r rune) bool {
+	return (r >= 0xE000 && r <= 0xF8FF) || // BMP PUA
+		(r >= 0xF0000 && r <= 0xFFFFD) || // Supplementary PUA-A
+		(r >= 0x100000 && r <= 0x10FFFD) // Supplementary PUA-B
+}
+
+// undecorate folds Private Use Area glyphs (powerline / Nerd Font separators and
+// icons) to spaces so the prompt-shape matchers see the underlying
+// "user@host <path>" structure regardless of terminal theme decoration.
+func undecorate(s string) string {
+	return strings.Map(func(r rune) rune {
+		if privateUse(r) {
+			return ' '
+		}
+		return r
+	}, s)
+}
+
 // detectShell reports whether the cleaned footer ends at an interactive shell,
 // returning the matched rule id and the evidence line. The footer is the
 // already-tail-bounded text the state rules use.
@@ -88,15 +117,20 @@ func detectShell(footer string) (ruleID, evidence string, ok bool) {
 	if last == "" {
 		return "", "", false
 	}
-	trimmed := strings.TrimLeft(last, " \t")
+	// Fold powerline / Nerd Font decoration glyphs to spaces so a themed prompt
+	// (Starship/p10k separators, distro icons) is recognized by its structure
+	// rather than defeated by the glyphs tmux capture-pane preserves. The
+	// matchers below run on the folded line; evidence reports the ORIGINAL line.
+	norm := undecorate(last)
+	trimmed := strings.TrimLeft(norm, " \t")
 
 	// 1) Starship / "user@host <path>" context line — decisive on the last line.
-	if contextPrompt.MatchString(last) {
+	if contextPrompt.MatchString(norm) {
 		return "shell.idle", last, true
 	}
 
 	// 2) Classic POSIX prompt ending in #/$/% with a user@host token — decisive.
-	if posixPrompt.MatchString(last) {
+	if posixPrompt.MatchString(norm) {
 		return "shell.idle", last, true
 	}
 

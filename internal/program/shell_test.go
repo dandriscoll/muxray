@@ -18,6 +18,11 @@ func TestShellPrompt_Variants(t *testing.T) {
 	}{
 		{"starship_context_verified_shape", " dev@host  /tmp\n"},
 		{"starship_with_branch", " dev@host  /src/project   main\n"},
+		// Powerline themes (Starship/p10k) render U+E0B0 separators between the
+		// user@host segment and the path (and before the branch). tmux preserves
+		// the glyph bytes; recognition must see through them. Job 280.
+		{"powerline_context", " dev@host  /src/project  main \n"},
+		{"powerline_with_distro_icon", "  dev@host  /src/project  main\n"},
 		{"bash_userhost_path", "user@host:~/project$\n"},
 		{"zsh_userhost_percent", "user@host ~ %\n"},
 		{"leading_glyph_starship", "❯ \n"},
@@ -90,7 +95,7 @@ func TestShellPrompt_LastLineWinsOverScrolledContent(t *testing.T) {
 		`    "[default] 0:bash*                          \"devlogs\" 12:12 03-Jun-26"`,
 		`  ]`,
 		`}`,
-		` dan@mataf  /src `,
+		` dev@host  /src `,
 	}, "\n")
 	res := program.Detect(frame, false)
 	if res.Program != "shell" || res.Status != program.StatusIdle {
@@ -146,5 +151,95 @@ func TestShellPrompt_ExplainTrace(t *testing.T) {
 func TestShellPrompt_NoTrailingNewline(t *testing.T) {
 	if res := program.Detect(strings.TrimRight(" dev@host  /tmp\n", "\n"), false); res.Program != "shell" {
 		t.Errorf("want shell without trailing newline, got %s/%s", res.Program, res.Status)
+	}
+}
+
+// pl is the powerline segment separator U+E0B0 (), rendered by Starship /
+// powerlevel10k themes between prompt segments. tmux capture-pane preserves it.
+const pl = ""
+
+// TestShellPrompt_PowerlineOverScrolledCodex is the load-bearing regression for
+// job 280: the exact reported pane. The footer ends at a powerline Starship
+// prompt (U+E0B0 separators between user@host and the path), while scrollback —
+// within the 12-line footer window — contains "codex" inside a filename
+// ("bash: /usr/local/share/codex-completion.bash: No such file or directory").
+// Pre-fix, contextPrompt could not see past the U+E0B0 glyph, detectShell
+// declined, and the incidental "codex" substring fired codex.idle. The fix folds
+// the decoration so the prompt is recognized → shell/idle, NOT a phantom Codex.
+func TestShellPrompt_PowerlineOverScrolledCodex(t *testing.T) {
+	frame := strings.Join([]string{
+		"=> Attaching to 'project' as code...",
+		"bash: /usr/local/share/completions/extra.bash: No such file or directory",
+		"bash: /usr/local/share/codex-completion.bash: No such file or directory",
+		"[exited]",
+		" code@host " + pl + " /src/project " + pl + " main",
+		"logout",
+		" dev@host " + pl + " /src/project " + pl + " main devbox --stop project",
+		"=> Stopping container 'project'...",
+		"=> Container 'project' stopped.",
+		" dev@host " + pl + " /src/project " + pl + " main devbox --delete project",
+		"=> Container 'project' deleted.",
+		" dev@host " + pl + " /src/project " + pl + " main ",
+	}, "\n")
+	res := program.Detect(frame, false)
+	if res.Program == "codex" {
+		t.Fatalf("regressed: powerline shell misread as codex (%s/%s) evidence=%q", res.Program, res.Status, res.Evidence)
+	}
+	if res.Program != "shell" || res.Status != program.StatusIdle {
+		t.Fatalf("powerline shell prompt over scrolled 'codex' filename: got %s/%s, want shell/idle", res.Program, res.Status)
+	}
+}
+
+// TestShellPrompt_DecorationDoesNotManufactureShell is the false-positive guard
+// for the job-280 fix: folding Private Use Area glyphs to spaces must NOT turn a
+// live agent frame into a shell. A decorated agent footer (a Nerd Font icon in
+// the line) with no user@host/path shape must still classify as the agent.
+func TestShellPrompt_DecorationDoesNotManufactureShell(t *testing.T) {
+	// Codex running, footer carries a Nerd Font icon (U+F085 ) plus the hint.
+	frame := "OpenAI Codex\n   working " + pl + " esc to interrupt\n"
+	if res := program.Detect(frame, false); res.Program == "shell" {
+		t.Fatalf("PUA folding manufactured a shell from an agent frame: %s/%s", res.Program, res.Status)
+	}
+}
+
+// TestShellPrompt_StructuralGuard_ScrollbackOverShellShape implements job 275's
+// filed-but-unimplemented I3 closure (008-I3), now mandatory on recurrence
+// (job 280). It prepends an adversarial scrollback block — box-drawing, harness
+// keywords (claude/codex), a harness hint, and a quoted status bar — above EACH
+// known shell shape (plain AND powerline) and asserts shell/idle every time. The
+// footer-bound principle says the last line is the present state regardless of
+// what scrolled above it; this locks the whole class against future content
+// shapes. (Scrollback stays within the 12-line footer window so the keywords are
+// live candidates for the harness classifier — the hostile case.)
+func TestShellPrompt_StructuralGuard_ScrollbackOverShellShape(t *testing.T) {
+	scrollback := []string{
+		"╭──────────────────────────────────────────╮",
+		"│ > do the thing                            │",
+		"╰──────────────────────────────────────────╯",
+		"  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt",
+		"bash: /usr/local/share/codex-completion.bash: No such file or directory",
+		"OpenAI Codex and Claude Code were mentioned here",
+		`    "[default] 0:claude*   \"devlogs\" 12:12 03-Jun-26"`,
+	}
+	shellShapes := []struct {
+		name string
+		last string
+	}{
+		{"plain_context", " dev@host  /src/project  main"},
+		{"plain_branch", " dev@host  /src/project   main"},
+		{"powerline_context", " dev@host " + pl + " /src/project " + pl + " main "},
+		{"powerline_distro_icon", " dev@host " + pl + " /src/project " + pl + " main"},
+		{"posix_dollar", "user@host:~/project$ "},
+		{"posix_percent", "user@host ~ % "},
+	}
+	for _, s := range shellShapes {
+		t.Run(s.name, func(t *testing.T) {
+			frame := strings.Join(append(append([]string{}, scrollback...), s.last), "\n")
+			res := program.Detect(frame, false)
+			if res.Program != "shell" || res.Status != program.StatusIdle {
+				t.Fatalf("scrollback defeated footer-bound shell detection: got %s/%s rule=%s evidence=%q, want shell/idle",
+					res.Program, res.Status, res.RuleID, res.Evidence)
+			}
+		})
 	}
 }

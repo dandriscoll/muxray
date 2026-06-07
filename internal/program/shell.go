@@ -61,6 +61,47 @@ var shellCommands = map[string]bool{
 	"busybox": true, "nu": true, "pwsh": true, "xonsh": true,
 }
 
+// transportClose holds distinctive transport-layer closure signatures a coding
+// agent prints when its backend connection drops (commonly an incus VM or proxy
+// dropping the websocket), exiting the user to a shell. Unlike a generic
+// "error:" — which a LIVE agent routinely prints in scrollback and which muxray
+// must NOT treat as a disconnect (job 268's deliberate footer-bound choice) —
+// these name the transport itself closing, so combined with a shell prompt in
+// the footer they decisively mean the harness is gone.
+var transportClose = []string{
+	"websocket: close",            // gorilla/websocket: "websocket: close 1006 (abnormal closure)"
+	"websocket connection closed", // alternate phrasing
+}
+
+// footerTransportClose reports whether the footer carries a transport-close
+// signature, returning the original-case line that carried it as evidence.
+func footerTransportClose(footer string) (evidence string, ok bool) {
+	lower := strings.ToLower(footer)
+	for _, s := range transportClose {
+		if strings.Contains(lower, s) {
+			return lineContaining(footer, s), true
+		}
+	}
+	return "", false
+}
+
+// footerShellPrompt returns the lowest footer line that is a decisive shell
+// prompt ("user@host <path>", or a classic "…[#$%]" prompt), terminal
+// decoration folded first. Empty if none. Scanning the WHOLE footer rather than
+// only the last line is safe ONLY because every caller gates it behind a
+// transport-close signature (see detectShell step 4) — ungated, a quoted prompt
+// in a live agent's scrollback would misfire.
+func footerShellPrompt(footer string) string {
+	lines := strings.Split(footer, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		norm := undecorate(lines[i])
+		if contextPrompt.MatchString(norm) || posixPrompt.MatchString(norm) {
+			return lines[i]
+		}
+	}
+	return ""
+}
+
 func containsHarnessHint(footerLower string) bool {
 	for _, h := range harnessHints {
 		if strings.Contains(footerLower, h) {
@@ -145,7 +186,24 @@ func detectShell(footer string) (ruleID, evidence string, ok bool) {
 		}
 	}
 
-	// 4) Leading prompt glyph (Starship/p10k/fish) — AMBIGUOUS with Claude's boxed
+	// 4) Transport disconnect hidden under trailing chrome. A distinctive
+	//    transport-close signature (e.g. "websocket: close 1006") TOGETHER WITH a
+	//    shell prompt anywhere in the footer means the agent's connection dropped
+	//    and the user is back at a shell — even when the prompt is NOT the last
+	//    line because a nested-tmux status bar and/or a stale agent footer remnant
+	//    trail it. (An abnormal websocket close in a nested-tmux pane leaves the
+	//    inner status bar's window name stale at "0:claude*" and may leave the
+	//    agent's last footer frame painted below the new prompt — so checks 1–3,
+	//    which read only the last line, miss the prompt and the pane is wrongly
+	//    read as claude/error.) The transport-close signature GATES the whole-
+	//    footer prompt scan: a live agent merely displaying a "user@host /path"
+	//    line or the words "websocket: close" in scrollback satisfies only one of
+	//    the two conditions, so it is never mistaken for a shell.
+	if ev, ok := footerTransportClose(footer); ok && footerShellPrompt(footer) != "" {
+		return "shell.idle", ev, true
+	}
+
+	// 5) Leading prompt glyph (Starship/p10k/fish) — AMBIGUOUS with Claude's boxed
 	//    "❯" input line, so only a shell when no live-frame marker (a TUI box or a
 	//    harness hint) is present in the footer, and not the "❯ 1." menu form.
 	if !strings.ContainsAny(footer, boxDrawing) && !containsHarnessHint(strings.ToLower(footer)) {

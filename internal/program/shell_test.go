@@ -243,3 +243,93 @@ func TestShellPrompt_StructuralGuard_ScrollbackOverShellShape(t *testing.T) {
 		})
 	}
 }
+
+// TestShellPrompt_DisconnectUnderTmuxChrome is the load-bearing regression for
+// job 281 and a recurrence of job 268's I1 (transport disconnect read as an
+// agent error). A nested-tmux pane: the inner tmux [default] window 0 is still
+// named "claude", but claude hit an abnormal websocket close and dropped to a
+// shell. The capture (the inner client's grid) ends at the inner status bar
+// "[default] 0:claude*"; above it sit a stale claude footer-hint, the real shell
+// prompt, and the websocket-close error. Pre-fix, detectShell's last-line checks
+// saw only "0:claude*" (not a shell command) and declined, so the harness
+// classifier reported the websocket-close line as claude/error. The fix: a
+// transport-close signature plus a shell prompt anywhere in the footer →
+// shell/idle — the connection dropped; the pane is at a shell, not erroring.
+func TestShellPrompt_DisconnectUnderTmuxChrome(t *testing.T) {
+	frame := strings.Join([]string{
+		"  - One commit, not two. The repo convention is one-job-per-commit.",
+		"────────────────────────────────────────────────────────────",
+		"❯ Error: websocket: close 1006 (abnormal closure): unexpected EOF",
+		" dev@host " + pl + " /src/project " + pl + " ppe ",
+		"  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents",
+		"",
+		"",
+		`[default] 0:claude*                          "✳ Review edited files" 12:12 03-Jun-26`,
+	}, "\n")
+	res := program.Detect(frame, false)
+	if res.Program == "claude" {
+		t.Fatalf("regressed (job 268/281): disconnect-to-shell read as %s/%s evidence=%q", res.Program, res.Status, res.Evidence)
+	}
+	if res.Program != "shell" || res.Status != program.StatusIdle {
+		t.Fatalf("disconnect under tmux chrome: got %s/%s, want shell/idle", res.Program, res.Status)
+	}
+}
+
+// TestShellPrompt_TransportCloseGate proves the two-condition gate on the
+// transport-disconnect path, so it cannot be satisfied by either signal alone:
+//   - a LIVE agent that merely MENTIONS "websocket: close" in scrollback but has
+//     no shell prompt must stay the agent (not shell);
+//   - a quoted "user@host /path" line in scrollback with NO transport-close
+//     signature must not flip a live agent to shell.
+func TestShellPrompt_TransportCloseGate(t *testing.T) {
+	// Condition A only (close signature, no prompt): live Claude discussing a
+	// websocket close, its live footer hint present, no shell prompt anywhere.
+	closeNoPrompt := strings.Join([]string{
+		"Claude Code",
+		"  The server logged: websocket: close 1006 (abnormal closure)",
+		"  Let me retry the request.",
+		"  esc to interrupt",
+	}, "\n")
+	if res := program.Detect(closeNoPrompt, false); res.Program == "shell" {
+		t.Fatalf("close signature without a shell prompt must NOT be shell: got %s/%s", res.Program, res.Status)
+	}
+	// Condition B only (prompt in scrollback, no close signature): a live Claude
+	// showing a transcript that quotes a shell prompt, with its live footer hint.
+	promptNoClose := strings.Join([]string{
+		"Claude Code",
+		"  Here is the transcript you asked about:",
+		"   dev@host  /src/project   main",
+		"  esc to interrupt",
+	}, "\n")
+	if res := program.Detect(promptNoClose, false); res.Program == "shell" {
+		t.Fatalf("scrollback prompt without a close signature must NOT be shell: got %s/%s", res.Program, res.Status)
+	}
+}
+
+// TestShellPrompt_StructuralGuard_ChromeBelowDisconnect extends job 275's I3
+// structural guard to the trailing-chrome dimension: an abnormal-close error and
+// a shell prompt, then assorted chrome BELOW the prompt (a stale agent hint, a
+// nested-tmux status bar with a stale agent window name). The present state is
+// the disconnect-to-shell regardless of what trails the prompt → shell/idle.
+func TestShellPrompt_StructuralGuard_ChromeBelowDisconnect(t *testing.T) {
+	prefix := []string{
+		"❯ Error: websocket: close 1006 (abnormal closure): unexpected EOF",
+		" dev@host  /src/project  main ",
+	}
+	trailers := [][]string{
+		{`[default] 0:claude*                 "✳ Review edited files" 12:12 03-Jun-26`},
+		{"  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt"},
+		{"  ⏵⏵ bypass permissions on (shift+tab to cycle)", "", `[default] 0:codex*    "x" 12:12`},
+		{"", "", ""},
+	}
+	for i, tr := range trailers {
+		t.Run("trailer"+string(rune('A'+i)), func(t *testing.T) {
+			frame := strings.Join(append(append([]string{}, prefix...), tr...), "\n")
+			res := program.Detect(frame, false)
+			if res.Program != "shell" || res.Status != program.StatusIdle {
+				t.Fatalf("chrome below a disconnect prompt defeated detection: got %s/%s rule=%s evidence=%q, want shell/idle",
+					res.Program, res.Status, res.RuleID, res.Evidence)
+			}
+		})
+	}
+}

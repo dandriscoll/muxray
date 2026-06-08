@@ -45,6 +45,9 @@ jobs:
             echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
           fi
 
+      - name: exposure scan
+        run: ./scripts/exposure-scan.sh
+
       - name: go vet
         run: go vet ./...
 

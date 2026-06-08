@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# Opt-in pre-commit hook: reject real personal identifiers before they are
+# committed. Enable once per clone with:
+#
+#   git config core.hooksPath .githooks
+#
+# CI runs the same scan on every push/PR, so this is a fast local backstop, not
+# the enforcement point.
+
+set -euo pipefail
+exec "$(git rev-parse --show-toplevel)/scripts/exposure-scan.sh"

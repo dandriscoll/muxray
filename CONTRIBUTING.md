@@ -10,7 +10,8 @@ agents. Contributions that keep it small, deterministic, and honest are very wel
 make build         # build ./muxray
 make test          # full suite (uses a real tmux if one is on PATH)
 make test-short    # skip the tmux integration + mock-harness layers
-make lint          # gofmt check + go vet
+make lint          # gofmt check + go vet + exposure scan
+make exposure-scan # reject real personal identifiers in tracked files
 make release-check VERSION=vX.Y.Z   # pre-release: validate the curl|sh install path
 ```
 
@@ -44,6 +45,22 @@ than silently passing.
 
 If you hit a misclassification in the wild, the **program-drift** issue template is
 the fastest way to report it — include the `--explain` trace and a sanitized screen.
+
+### Sanitize captures before committing
+
+Fixtures and tests are derived from real terminal captures, which can carry a real
+`user@host` shell prompt, a personal email, or a private filesystem path. This repo
+is public and world-readable, so **scrub captured identifiers to synthetic
+placeholders before you commit** — use `dev@host`, `user@example.com`, and the like.
+This applies anywhere a capture lands, including inline test cases (e.g.
+`internal/program/shell_test.go`), not only `internal/program/testdata/`.
+
+`make exposure-scan` (run by `make lint` and enforced in CI on every push/PR)
+rejects a `login@host` / email whose host isn't a known synthetic placeholder. To
+run it automatically before each local commit, enable the bundled hook once per
+clone: `git config core.hooksPath .githooks`. If you add a legitimate synthetic
+identifier whose host is new, add that **host** to `ALLOWED_HOSTS` in
+`scripts/exposure-scan.sh` — never add a real machine name or mail domain.
 
 ## Scope
 

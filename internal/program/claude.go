@@ -32,15 +32,29 @@ func claudeAdapter() adapter {
 			return 0
 		},
 		rules: []Rule{
-			// Order matters: most urgent / most specific first.
-			phraseRule("claude.error", StatusError, 0.85,
-				"api error", "execution error", "request failed",
-				"overloaded", "error:", "fatal:",
-			),
-			phraseRule("claude.blocked", StatusBlocked, 0.8,
-				"blocked on", "blocked by", "cannot continue until",
-				"waiting on lock", "merge conflict",
-			),
+			// Order matters: first match wins. The ordering is by RELIABILITY of
+			// the signal, not by a notion of urgency.
+			//
+			//   1. needs_approval / waiting_for_input — real dialog chrome; the
+			//      agent is halted needing the human. These never co-occur with the
+			//      live spinner.
+			//   2. running — the live-working indicator ("esc to interrupt"). This
+			//      is the single most reliable Claude chrome: a pane showing it is
+			//      actively executing a turn and therefore CANNOT be in a stopped
+			//      state. It must beat the content-phrase rules below.
+			//   3. error / blocked — these key off free-text content substrings
+			//      ("error:", "blocked by", "merge conflict", …), not chrome, so
+			//      they also match incidental footer content: the agent's todo
+			//      panel, a quoted log line, narration. Bounding state to the footer
+			//      (issues #2/#4) is not enough — Claude renders its todo panel
+			//      INSIDE the footer, directly above the input box. So these run
+			//      AFTER running: a phrase like "(… blocked by CSP)" in a todo row
+			//      must not override a pane that is provably still working
+			//      (job 305 — the rw session reported running-as-blocked).
+			//
+			// error/blocked still fire correctly for a genuinely stopped pane: when
+			// the agent has errored or declared itself blocked, the spinner is gone,
+			// "esc to interrupt" is absent, running does not match, and these win.
 			phraseRule("claude.needs_approval", StatusNeedsApproval, 0.9,
 				"do you want to proceed", "do you want to make this edit",
 				"do you want to create", "do you want to run",
@@ -53,6 +67,14 @@ func claudeAdapter() adapter {
 			phraseRule("claude.running", StatusRunning, 0.9,
 				"esc to interrupt", "cogitating", "pondering", "herding",
 				"thinking…", "working…", "tool use in progress",
+			),
+			phraseRule("claude.error", StatusError, 0.85,
+				"api error", "execution error", "request failed",
+				"overloaded", "error:", "fatal:",
+			),
+			phraseRule("claude.blocked", StatusBlocked, 0.8,
+				"blocked on", "blocked by", "cannot continue until",
+				"waiting on lock", "merge conflict",
 			),
 			phraseRule("claude.completed", StatusCompleted, 0.7,
 				"completed in", "✓ done", "done!", "all set",

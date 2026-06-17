@@ -171,6 +171,40 @@ func TestDetect_StateIsFooterBound(t *testing.T) {
 	}
 }
 
+// TestDetect_RunningBeatsInFooterStoppedPhrase is the regression for job 305: a
+// live, actively-running Claude frame was classified "blocked" because its todo
+// panel — which renders INSIDE the footer, right above the input box — carried a
+// row reading "… blocked by …". The content-phrase rule claude.blocked matched
+// that incidental row and, being ordered before claude.running, won first-match.
+// Footer-bounding (issue #4, TestDetect_StateIsFooterBound case A) does NOT cover
+// this: the phrase is within the footer, not scrolled above it; only the live
+// "esc to interrupt" chrome winning over the content-phrase stopped-state rules
+// fixes it. Frame is synthetic (muxray is public) but structurally identical to the
+// real rw capture that triggered the report.
+func TestDetect_RunningBeatsInFooterStoppedPhrase(t *testing.T) {
+	frame := "" +
+		"● Refactoring the payments module…\n" +
+		"\n" +
+		"● Update Todos\n" +
+		"  ⎿  ✔ #41 Fix typecheck error on main (build break)\n" +
+		"     ◼ #42 Extract the retry helper into its own package\n" +
+		"     ◻ #43 Cache the QR decoder locally (web scanner blocked by CSP)\n" +
+		"     ◻ #44 Start the call harness with the mic muted\n" +
+		"\n" +
+		"────────────────────────────────────────────────────────────────────\n" +
+		"❯\n" +
+		"────────────────────────────────────────────────────────────────────\n" +
+		"  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt · ctrl+t to hide tasks\n"
+	clean := normalize.Clean(frame, 200).Clean
+	res := program.Detect(clean, false)
+	if res.Program != "claude" || res.Status != program.StatusRunning {
+		t.Fatalf("running frame with in-footer 'blocked by' todo: got %s/%s, want claude/running", res.Program, res.Status)
+	}
+	if res.RuleID != "claude.running" {
+		t.Errorf("got rule %q, want claude.running (the live indicator must win over content-phrase stopped states)", res.RuleID)
+	}
+}
+
 // TestDetect_ClaudeReadyPromptIsIdle is the regression for the chat-reported bug
 // (job 272): the CURRENT Claude Code ready prompt — a "✻ Cooked for …" rested
 // spinner, the "❯" input box, and the permission-mode footer

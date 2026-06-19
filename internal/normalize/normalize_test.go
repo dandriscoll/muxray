@@ -90,6 +90,146 @@ func TestClean_InvalidUTF8(t *testing.T) {
 	}
 }
 
+func TestClean_StripsInputBoxGhostText(t *testing.T) {
+	// The Claude input box at rest: a bright "❯ " prompt followed by faint
+	// (SGR 2) ghost autosuggestion text. The ghost text must not survive into the
+	// cleaned output, where it would read as a real pending user prompt.
+	raw := "\x1b[39m❯ \x1b[2mWhy\x1b[0m \x1b[2mdidn't\x1b[0m \x1b[2mset_devlogs_url\x1b[0m \x1b[2mswitch\x1b[0m\n  ? for shortcuts"
+	r := Clean(raw, 0)
+	if strings.Contains(r.Clean, "Why") || strings.Contains(r.Clean, "set_devlogs_url") {
+		t.Errorf("ghost suggestion leaked into clean output: %q", r.Clean)
+	}
+	lines := strings.Split(r.Clean, "\n")
+	if lines[0] != "❯" {
+		t.Errorf("prompt line = %q, want %q (empty box)", lines[0], "❯")
+	}
+	if r.Suggestion != "Why didn't set_devlogs_url switch" {
+		t.Errorf("Suggestion = %q, want the lifted ghost text", r.Suggestion)
+	}
+}
+
+func TestClean_GhostWordsSeparatedByNBSP(t *testing.T) {
+	// Claude pads its ghost suggestion with non-breaking spaces (U+00A0) between
+	// words. Those must read as blanks (not as real typed input) so the
+	// suggestion is still lifted, and they fold to plain spaces in the result.
+	raw := "\x1b[39m❯ \x1b[2mWhy\x1b[0m \x1b[2mdidn't\x1b[0m \x1b[2mit\x1b[0m\n  ? for shortcuts"
+	r := Clean(raw, 0)
+	if got := strings.Split(r.Clean, "\n")[0]; got != "❯" {
+		t.Errorf("prompt line = %q, want empty box %q", got, "❯")
+	}
+	if r.Suggestion != "Why didn't it" {
+		t.Errorf("Suggestion = %q, want %q", r.Suggestion, "Why didn't it")
+	}
+}
+
+func TestClean_KeepsRealTypedInput(t *testing.T) {
+	// Real user input is NOT faint and must be preserved verbatim.
+	raw := "❯ deploy the azure collector"
+	r := Clean(raw, 0)
+	if r.Clean != "❯ deploy the azure collector" {
+		t.Errorf("real input altered: %q", r.Clean)
+	}
+	if r.Suggestion != "" {
+		t.Errorf("real input must not produce a suggestion, got %q", r.Suggestion)
+	}
+}
+
+func TestClean_KeepsApprovalMenu(t *testing.T) {
+	// The "❯ 1. Yes" approval selection is bright, not faint — leave it intact so
+	// the needs_approval rule still fires.
+	raw := "\x1b[1m❯ 1. Yes\x1b[0m\n  2. No"
+	r := Clean(raw, 0)
+	if !strings.Contains(r.Clean, "❯ 1. Yes") {
+		t.Errorf("approval menu altered: %q", r.Clean)
+	}
+}
+
+func TestClean_KeepsDimContentOutsideInputBox(t *testing.T) {
+	// Dim text that is NOT on a prompt line (recaps, "+N lines" hints) is real
+	// content and must be preserved.
+	raw := "\x1b[2m… +2 lines (ctrl+o to expand)\x1b[0m\n\x1b[2m※ recap: it works\x1b[0m"
+	r := Clean(raw, 0)
+	if !strings.Contains(r.Clean, "+2 lines") || !strings.Contains(r.Clean, "recap: it works") {
+		t.Errorf("legitimate dim content dropped: %q", r.Clean)
+	}
+}
+
+func TestClean_StripsCodexGhostText(t *testing.T) {
+	// Codex's input prompt is "›" (U+203A); its ghost suggestion renders faint.
+	raw := "› \x1b[2mask Codex something\x1b[0m\n  OpenAI Codex"
+	r := Clean(raw, 0)
+	if strings.Contains(r.Clean, "ask Codex something") {
+		t.Errorf("codex ghost leaked: %q", r.Clean)
+	}
+	if got := strings.Split(r.Clean, "\n")[0]; got != "›" {
+		t.Errorf("prompt line = %q, want empty box %q", got, "›")
+	}
+	if r.Suggestion != "ask Codex something" {
+		t.Errorf("Suggestion = %q, want %q", r.Suggestion, "ask Codex something")
+	}
+}
+
+func TestClean_StripsCopilotGhostText(t *testing.T) {
+	// Copilot's prompt is the word-prefixed "copilot>"; ghost text follows faint.
+	raw := "copilot> \x1b[2mwhat would you like to do?\x1b[0m"
+	r := Clean(raw, 0)
+	if strings.Contains(r.Clean, "what would you like") {
+		t.Errorf("copilot ghost leaked: %q", r.Clean)
+	}
+	if r.Clean != "copilot>" {
+		t.Errorf("prompt line = %q, want %q (prompt kept, ghost gone)", r.Clean, "copilot>")
+	}
+	if r.Suggestion != "what would you like to do?" {
+		t.Errorf("Suggestion = %q, want %q", r.Suggestion, "what would you like to do?")
+	}
+}
+
+func TestClean_KeepsBareBlockquoteWithLeadingGreater(t *testing.T) {
+	// A bare ">" at line start is a markdown blockquote, not a word-prefixed
+	// prompt, so dim quoted text must survive.
+	raw := "\x1b[2m> dimly quoted\x1b[0m"
+	r := Clean(raw, 0)
+	if !strings.Contains(r.Clean, "dimly quoted") {
+		t.Errorf("blockquote wrongly stripped: %q", r.Clean)
+	}
+}
+
+func TestClean_KeepsDimBlockquote(t *testing.T) {
+	// A bare ">" begins a markdown blockquote, not an input box. Dim quoted text
+	// must survive — only a ">" inside a box border counts as a prompt.
+	raw := "\x1b[2m> a dimly quoted line\x1b[0m"
+	r := Clean(raw, 0)
+	if !strings.Contains(r.Clean, "a dimly quoted line") {
+		t.Errorf("dim blockquote wrongly stripped: %q", r.Clean)
+	}
+}
+
+func TestClean_StripsBoxedGhostText(t *testing.T) {
+	// The older boxed input style: "│ > ghost │". A ">" inside a border IS a
+	// prompt, so its faint ghost text is removed while the border is kept.
+	raw := "│ > \x1b[2mtry asking a question\x1b[0m │"
+	r := Clean(raw, 0)
+	if strings.Contains(r.Clean, "try asking") {
+		t.Errorf("boxed ghost text leaked: %q", r.Clean)
+	}
+	if !strings.Contains(r.Clean, "│") {
+		t.Errorf("box border dropped: %q", r.Clean)
+	}
+	if r.Suggestion != "try asking a question" {
+		t.Errorf("Suggestion = %q, want box ghost text without the border", r.Suggestion)
+	}
+}
+
+func TestClean_GhostTextHashStableAcrossSuggestions(t *testing.T) {
+	// Two captures differing only in the rotating ghost suggestion must clean to
+	// identical text, so an idle pane does not report spurious changes.
+	a := Clean("\x1b[39m❯ \x1b[2mtry this thing\x1b[0m\n  ? for shortcuts", 0).Clean
+	b := Clean("\x1b[39m❯ \x1b[2mor that other thing instead\x1b[0m\n  ? for shortcuts", 0).Clean
+	if a != b {
+		t.Errorf("ghost suggestions produced different clean text:\n a=%q\n b=%q", a, b)
+	}
+}
+
 func TestClean_DeterministicHashInput(t *testing.T) {
 	// Two captures of the same content with different ANSI coloring must clean
 	// to identical text (so the content hash is stable).

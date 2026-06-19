@@ -300,9 +300,10 @@ func resolveSince(since string, target tmux.Target) (*snapshot.Snapshot, *cmdErr
 
 type statusResponse struct {
 	schema.Envelope
-	Target         tmux.Target    `json:"target"`
-	Classification program.Result `json:"classification"`
-	Tail           []string       `json:"tail_excerpt"`
+	Target            tmux.Target    `json:"target"`
+	Classification    program.Result `json:"classification"`
+	ProgramSuggestion string         `json:"program_suggestion,omitempty"`
+	Tail              []string       `json:"tail_excerpt"`
 }
 
 func cmdStatus(args []string) int {
@@ -329,10 +330,11 @@ func cmdStatus(args []string) int {
 		return emitError(wantJSON, "status", cerr)
 	}
 	resp := statusResponse{
-		Envelope:       schema.NewEnvelope("status", version.Version),
-		Target:         target,
-		Classification: result,
-		Tail:           tailExcerpt(snap.Clean, 10),
+		Envelope:          schema.NewEnvelope("status", version.Version),
+		Target:            target,
+		Classification:    result,
+		ProgramSuggestion: snap.ProgramSuggestion,
+		Tail:              tailExcerpt(snap.Clean, 10),
 	}
 	recordEvent(telemetry.Event{
 		Command: "status", Success: true, Program: result.Program, Status: string(result.Status),

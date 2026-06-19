@@ -174,6 +174,8 @@ func capturePane(t tmux.Target, lines, scrollback int) (*snapshot.Snapshot, *cmd
 	}
 	res := normalize.Clean(raw, lines)
 	snap := snapshot.New(t, tmuxVer, raw, res.Clean, res.LineCount, res.CharCount, res.Truncated, res.ANSIFound, time.Now())
+	// Carried alongside Clean but outside the content hash (see Snapshot doc).
+	snap.ProgramSuggestion = res.Suggestion
 	return snap, nil
 }
 

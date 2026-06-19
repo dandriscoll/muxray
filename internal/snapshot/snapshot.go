@@ -22,7 +22,10 @@ import (
 // normalization (which would shift content hashes) must bump this so a newer
 // binary reading an older snapshot detects the mismatch instead of reporting a
 // false change.
-const SchemaVersion = "1"
+//
+// v2: normalization removes agent input-box ghost/autosuggestion text, so a
+// pane whose only change is a rotating ghost suggestion now hashes stably.
+const SchemaVersion = "2"
 
 // Snapshot is a captured pane and its metadata.
 type Snapshot struct {
@@ -38,6 +41,11 @@ type Snapshot struct {
 	Truncated      bool        `json:"truncated"`
 	ANSINormalized bool        `json:"ansi_normalized"`
 	ContentHash    string      `json:"content_hash"`
+	// ProgramSuggestion is the harness's input-box ghost autosuggestion /
+	// placeholder text, lifted out of Clean so it is not mistaken for a pending
+	// user prompt. It is intentionally excluded from ContentHash (which covers
+	// Clean only), so a rotating suggestion never registers as a content change.
+	ProgramSuggestion string `json:"program_suggestion,omitempty"`
 }
 
 // HashContent returns the deterministic content hash for cleaned pane text.

@@ -1,6 +1,7 @@
 ---
 title: "muxray"
 summary: "Reads live tmux panes as deterministic JSON so an agent's control loop knows what each pane is doing — without scraping terminal bytes."
+icon: "https://raw.githubusercontent.com/dandriscoll/muxray/main/muxray.png"
 shipped: 2026-06-04
 version: "1.0.0"
 tags:

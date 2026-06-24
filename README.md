@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="muxray.png" alt="muxray logo" width="180">
+</p>
+
 # muxray
 
 **muxray reads live tmux panes as deterministic JSON so an agent's control loop

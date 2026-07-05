@@ -134,6 +134,60 @@ func TestParseUntil(t *testing.T) {
 	}
 }
 
+func TestResolveWatchExit(t *testing.T) {
+	// Default: timeout maps to ExitTimeout (5) when the caller passes the default.
+	if got := resolveWatchExit(outcomeTimeout, ExitTimeout); got != ExitTimeout {
+		t.Errorf("timeout default: got %d, want %d", got, ExitTimeout)
+	}
+	// Custom code such as 0 is honored on timeout — the headline use case.
+	if got := resolveWatchExit(outcomeTimeout, 0); got != 0 {
+		t.Errorf("timeout custom 0: got %d, want 0", got)
+	}
+	if got := resolveWatchExit(outcomeTimeout, 42); got != 42 {
+		t.Errorf("timeout custom 42: got %d, want 42", got)
+	}
+	// Only timeout uses the custom code; reached and cancelled are successful waits.
+	if got := resolveWatchExit(outcomeReached, 42); got != ExitOK {
+		t.Errorf("reached: got %d, want %d (custom code must not leak to non-timeout)", got, ExitOK)
+	}
+	if got := resolveWatchExit(outcomeCancelled, 42); got != ExitOK {
+		t.Errorf("cancelled: got %d, want %d", got, ExitOK)
+	}
+}
+
+func TestValidateTimeoutExit(t *testing.T) {
+	for _, code := range []int{0, 5, 255} {
+		if err := validateTimeoutExit(code); err != nil {
+			t.Errorf("code %d should be valid, got %v", code, err)
+		}
+	}
+	for _, code := range []int{-1, 256, 300} {
+		err := validateTimeoutExit(code)
+		if err == nil || err.exit != ExitUsage {
+			t.Errorf("code %d should be a usage error, got %v", code, err)
+		}
+		if err != nil && !strings.Contains(err.hint, "255") {
+			t.Errorf("code %d: hint should name the 0-255 bound, got %q", code, err.hint)
+		}
+	}
+}
+
+// The flag is registered and validated before any tmux work, so a bad code is a
+// clean usage error with no live tmux required.
+func TestWatchTimeoutExitFlagValidation(t *testing.T) {
+	_, errOut, code := run("watch", "--timeout-exit", "300")
+	if code != ExitUsage {
+		t.Errorf("bad --timeout-exit: exit=%d, want %d", code, ExitUsage)
+	}
+	if !strings.Contains(errOut, "timeout-exit") {
+		t.Errorf("stderr should name the flag: %q", errOut)
+	}
+	// Negative uses the =form so flag parsing doesn't read -1 as the next flag.
+	if _, _, code := run("watch", "--timeout-exit=-1"); code != ExitUsage {
+		t.Errorf("negative --timeout-exit: exit=%d, want %d", code, ExitUsage)
+	}
+}
+
 func TestBuildScanResponse(t *testing.T) {
 	classes := []paneClass{
 		{pane: tmuxPane("work", "1", "0", "%1", true), res: res(program.StatusRunning)},

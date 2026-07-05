@@ -177,6 +177,7 @@ func cmdWatch(args []string) int {
 	untilFlag := fs.String("until", "", "comma-separated states to wait FOR (default: any non-running 'settled' state)")
 	interval := fs.Duration("interval", time.Second, "poll interval (floored at 200ms)")
 	timeout := fs.Duration("timeout", 0, "give up after this long (0 = wait forever)")
+	timeoutExit := fs.Int("timeout-exit", ExitTimeout, "process exit code to return on timeout (0-255)")
 	if err := fs.Parse(args); err != nil {
 		return flagError("watch", true, err)
 	}
@@ -188,6 +189,12 @@ func cmdWatch(args []string) int {
 	}
 	if *interval < 200*time.Millisecond {
 		*interval = 200 * time.Millisecond
+	}
+	// Validate the timeout exit code before touching tmux: an out-of-range code
+	// would alias mod 256 at os.Exit (300 -> 44), silently mapping timeout onto
+	// an unrelated code. Fail fast with a usage error instead.
+	if verr := validateTimeoutExit(*timeoutExit); verr != nil {
+		return emitError(wantJSON, "watch", verr)
 	}
 
 	spec, serr := c.targetSpec()
@@ -242,8 +249,29 @@ func cmdWatch(args []string) int {
 	}); rc != ExitOK {
 		return rc // a render failure is an internal error, not a watch outcome
 	}
+	return resolveWatchExit(outcome, *timeoutExit)
+}
+
+// validateTimeoutExit rejects a --timeout-exit code outside the Unix exit-status
+// range. A process exit status is 8-bit, so os.Exit truncates mod 256; accepting
+// >255 (or a negative) would silently alias the caller's chosen code onto an
+// unrelated one, which is exactly what "validated" is meant to prevent.
+func validateTimeoutExit(code int) *cmdError {
+	if code < 0 || code > 255 {
+		return &cmdError{class: "usage",
+			message: fmt.Sprintf("invalid --timeout-exit %d", code),
+			hint:    "exit code must be between 0 and 255", exit: ExitUsage}
+	}
+	return nil
+}
+
+// resolveWatchExit maps a completed watch outcome to the process exit code.
+// Only a timeout uses the caller-chosen code (default ExitTimeout); every other
+// outcome that reaches here (reached/cancelled) is a successful wait and returns
+// ExitOK. Capture and render errors return earlier in cmdWatch and never arrive.
+func resolveWatchExit(outcome watchOutcome, timeoutExit int) int {
 	if outcome == outcomeTimeout {
-		return ExitTimeout
+		return timeoutExit
 	}
 	return ExitOK
 }

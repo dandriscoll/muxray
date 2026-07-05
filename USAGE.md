@@ -70,6 +70,11 @@ Two verbs ARE the loop — you don't have to hand-roll poll+sleep+compare:
    - narrow it: `--until idle,needs_approval` returns only on those.
    - bound it: `--timeout 5m` exits **5** if the pane never settles (the final
      classification is still emitted, so you learn the last-seen state).
+   - remap the timeout exit: `--timeout-exit <code>` returns `<code>` instead of
+     `5` on timeout (default `5`; `0`–`255`). Use `--timeout-exit 0` when a
+     bounded wait that doesn't settle is expected and must not abort a `set -e`
+     loop. Only the exit code changes — the timeout JSON is still emitted. Avoid
+     `1`–`4` (they overload muxray's own error codes); prefer `0` or `≥ 6`.
    - `--interval` sets the poll cadence (floored at 200ms).
    - Then branch on the final `status`: `needs_approval`/`waiting_for_input` → hand
      off to a human; `error` → restart/alert; `idle`/`completed` → assign the next
@@ -95,7 +100,8 @@ session by name, `--session <name>` is a clearer equivalent (mutually exclusive 
 ## Exit codes
 
 `0` ok (including `changed:true`/`false`) · `1` internal · `2` usage · `3` tmux/capture
-· `4` snapshot not found · `5` `watch` timed out before the pane reached a target state.
+· `4` snapshot not found · `5` `watch` timed out before the pane reached a target state
+(override with `watch --timeout-exit <code>`).
 On failure, stderr carries a JSON object whose `error.class` is a stable, branchable
 identifier and whose `error.hint` names the next action.
 

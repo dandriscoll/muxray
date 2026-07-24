@@ -9,6 +9,21 @@ a program is doing without scraping terminal bytes. **Output is JSON on stdout; 
 are JSON on stderr.** Runs locally — no network egress; pane content (which may hold
 secrets) never leaves the machine.
 
+## There is a skill for this
+
+`muxray skill` prints muxray's **agent skill definition** — the standard `SKILL.md`
+(frontmatter + when-to-use + invocation rules) covering the same ground as this document
+in the form an agent harness loads. It is embedded in the binary, so it is available
+wherever muxray is:
+
+```bash
+mkdir -p ~/.claude/skills/muxray && muxray skill > ~/.claude/skills/muxray/SKILL.md
+```
+
+The piped-out file is self-contained; the full bundle (wrapper scripts, JSON cheat-sheet,
+a worked example) lives at `skills/muxray/` in the repo, and the skill's `{baseDir}/scripts/…`
+wrapper references only resolve if you install that directory instead.
+
 ## Commands you call
 
 | Command | What you get |

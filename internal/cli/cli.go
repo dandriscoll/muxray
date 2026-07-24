@@ -71,6 +71,9 @@ func Run(args []string) int {
 	case "usage":
 		fmt.Fprint(stdout, muxray.Usage)
 		return ExitOK
+	case "skill":
+		fmt.Fprint(stdout, muxray.Skill)
+		return ExitOK
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, version.String())
 		return ExitOK
@@ -238,6 +241,7 @@ Commands:
   shim        Run a local credential-free fake LLM backend for a harness
   update      Update muxray in place from the latest GitHub release (--check, --version)
   usage       Print the agent-facing calling contract (same as USAGE.md)
+  skill       Print the drop-in agent skill definition (SKILL.md, embedded)
   version     Print the muxray version
 
 Common flags:
@@ -252,6 +256,10 @@ Exit codes: 0 ok · 1 internal · 2 usage · 3 tmux/capture · 4 snapshot not fo
 
 JSON is the default output. Program parsing degrades to status "unknown" rather
 than failing. See 'muxray <command> -h' for command-specific flags.
+
+Agents: 'muxray usage' is the full calling contract, and 'muxray skill' prints
+this tool's agent skill definition — install it with
+  muxray skill > ~/.claude/skills/muxray/SKILL.md
 
 Examples:
   muxray scan --text                       # every pane and what it's doing

@@ -96,6 +96,21 @@ is read locally and **never leaves the box** (no network egress; see Telemetry b
 > contract, so wiring it into a control loop is a few lines wherever you already manage
 > tmux panes.
 
+### Drop in the agent skill
+
+For harnesses that load `SKILL.md` skills (OpenClaw, Claude Code, and other
+[AgentSkills](https://agentskills.io) consumers), muxray ships its own — when to reach
+for it, how to call it safely, and how to read the JSON back. It is **embedded in the
+binary**, so an agent that has `muxray` on `PATH` can install it without the repo:
+
+```bash
+mkdir -p ~/.claude/skills/muxray && muxray skill > ~/.claude/skills/muxray/SKILL.md
+```
+
+The full bundle — wrapper scripts, a JSON cheat-sheet, and a worked example — lives at
+[`skills/muxray/`](skills/muxray/); see its [README](skills/muxray/README.md) for the
+`openclaw skills install` path.
+
 ---
 
 ## Install
@@ -264,6 +279,7 @@ reproducible across machines.
 | `muxray shim`      | Run a local credential-free fake LLM backend for a harness     |
 | `muxray update`    | Update muxray in place from the latest GitHub release          |
 | `muxray usage`     | Print the agent-facing calling contract (same as `USAGE.md`)   |
+| `muxray skill`     | Print the embedded agent skill definition (same as `skills/muxray/SKILL.md`) |
 | `muxray version`   | Print the version                                              |
 
 Common flags: `--pane`, `--session <name>` (target a session by name; alternative

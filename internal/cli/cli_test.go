@@ -40,7 +40,7 @@ func TestHelp(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("exit=%d", code)
 	}
-	for _, cmd := range []string{"list", "snapshot", "diff", "status", "scan", "watch", "inspect", "doctor", "usage"} {
+	for _, cmd := range []string{"list", "snapshot", "diff", "status", "scan", "watch", "inspect", "doctor", "usage", "skill"} {
 		if !strings.Contains(out, cmd) {
 			t.Errorf("help missing command %q", cmd)
 		}
@@ -285,6 +285,25 @@ func TestUsage(t *testing.T) {
 	for _, marker := range []string{"schema_version", "program", "status", "Exit codes"} {
 		if !strings.Contains(out, marker) {
 			t.Errorf("usage output missing %q", marker)
+		}
+	}
+	// The skill has to be discoverable from the contract an agent is pointed at;
+	// dropping this line puts the skill back out of reach of anyone holding the binary.
+	if !strings.Contains(out, "muxray skill") {
+		t.Error("usage output does not mention 'muxray skill'")
+	}
+}
+
+func TestSkill(t *testing.T) {
+	out, _, code := run("skill")
+	if code != ExitOK {
+		t.Fatalf("exit=%d", code)
+	}
+	// What makes this a loadable skill rather than prose: the frontmatter a harness
+	// parses, and the gating metadata that decides whether it loads at all.
+	for _, marker := range []string{"name: muxray", "description:", "metadata:", "requires"} {
+		if !strings.Contains(out, marker) {
+			t.Errorf("skill output missing %q", marker)
 		}
 	}
 }

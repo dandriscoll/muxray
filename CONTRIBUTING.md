@@ -15,6 +15,12 @@ make exposure-scan # reject real personal identifiers in tracked files
 make release-check VERSION=vX.Y.Z   # pre-release: validate the curl|sh install path
 ```
 
+Two markdown files are compiled into the binary and are part of its output, not just
+docs: `USAGE.md` (`muxray usage`, via `usage.go`) and `skills/muxray/SKILL.md`
+(`muxray skill`, via `skill.go`). Edit them freely — the embed keeps the printed text
+and the committed file identical by construction — but **moving or deleting either
+breaks `go build`**, and both must stay committed or `go install` fails for consumers.
+
 ## Cutting a release
 
 `muxray` releases on a pushed `v*` tag (`.github/workflows/release.yml`). Before

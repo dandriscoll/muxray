@@ -1,0 +1,3 @@
+GitHub Copilot
+  Cannot continue until the merge conflict in retry.go is resolved.
+  Fix the conflict, then ask again.

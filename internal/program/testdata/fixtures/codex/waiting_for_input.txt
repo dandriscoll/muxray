@@ -1,0 +1,3 @@
+OpenAI Codex
+  Waiting for input: describe the change you want next.
+  Type a message and press Enter when ready.

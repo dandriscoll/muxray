@@ -7,10 +7,16 @@ package tmux_test
 // error, completion) without any real model call or program credential.
 //
 // The screens are rendered with printf (no temp files), so the test is hermetic
-// and does not depend on the surrounding TMPDIR path. These run on the default
-// tmux server (exercising muxray's own Capture path) but create and destroy only
-// their own uniquely-named session, and skip cleanly when tmux is unavailable or
-// in -short mode.
+// and does not depend on the surrounding TMPDIR path. It runs on a PRIVATE tmux
+// server (a dedicated socket under a fresh TMUX_TMPDIR), never the default
+// server: driving the default server from inside a live tmux+agent session
+// pokes the operator's panes and can destabilize their loop. Because the
+// private server is addressed through TMUX_TMPDIR, muxray's own Capture path
+// (which shells out to bare `tmux`) exercises the same private server — the
+// test still covers muxray's real capture code, just pointed at an isolated
+// socket. The test strips TMUX/TMUX_PANE from every tmux invocation so a client
+// launched from inside tmux can never resolve a target against the outer
+// server. Skips cleanly when tmux is unavailable or in -short mode.
 
 import (
 	"os"
@@ -25,13 +31,64 @@ import (
 	"github.com/dandriscoll/muxray/internal/tmux"
 )
 
-func TestMockHarness_StateTransitions(t *testing.T) {
+// harnessEnv owns the private tmux server the mock harness renders into.
+type harnessEnv struct {
+	t      *testing.T
+	tmpdir string
+}
+
+// newHarnessEnv starts a private tmux server under a fresh TMUX_TMPDIR and
+// returns the env every tmux invocation must run with. Isolation is by
+// TMUX_TMPDIR alone (the server keeps the default socket NAME inside the
+// private dir): muxray's own Capture path shells out to bare `tmux`, so the
+// only way to point it at this server without code changes is the env var —
+// a named -L socket would leave bare `tmux` reaching the real default server.
+func newHarnessEnv(t *testing.T) *harnessEnv {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("skipping mock-harness test in -short mode")
 	}
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed; skipping mock-harness test")
 	}
+	tmpdir, err := os.MkdirTemp("", "muxray-harness-tmp-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	e := &harnessEnv{t: t, tmpdir: tmpdir}
+	t.Cleanup(func() {
+		_, _ = e.tmux("kill-server")
+		_ = os.RemoveAll(tmpdir)
+	})
+	return e
+}
+
+// env returns the environment for a tmux client: the private server's
+// TMUX_TMPDIR, with TMUX/TMUX_PANE removed so no target ever resolves against
+// an outer (possibly default) server.
+func (e *harnessEnv) env() []string {
+	env := append([]string{}, os.Environ()...)
+	filtered := env[:0]
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "TMUX=") || strings.HasPrefix(kv, "TMUX_PANE=") {
+			continue
+		}
+		filtered = append(filtered, kv)
+	}
+	return append(filtered, "TMUX_TMPDIR="+e.tmpdir)
+}
+
+// tmux runs a tmux client against the private server only.
+func (e *harnessEnv) tmux(args ...string) (string, error) {
+	e.t.Helper()
+	cmd := exec.Command("tmux", args...)
+	cmd.Env = e.env()
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func TestMockHarness_StateTransitions(t *testing.T) {
+	e := newHarnessEnv(t)
 
 	steps := []struct {
 		name        string
@@ -50,10 +107,10 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 		t.Run(s.name, func(t *testing.T) {
 			// Each step gets its own session (isolation, no cross-step bleed).
 			session := "muxray-harness-" + strconv.Itoa(os.Getpid()) + "-" + strconv.Itoa(i)
-			if out, err := exec.Command("tmux", "new-session", "-d", "-s", session, "-x", "120", "-y", "40").CombinedOutput(); err != nil {
+			if out, err := e.tmux("new-session", "-d", "-s", session, "-x", "120", "-y", "40"); err != nil {
 				t.Skipf("could not start tmux session (%v): %s", err, out)
 			}
-			defer exec.Command("tmux", "kill-session", "-t", session).Run()
+			defer e.tmux("kill-session", "-t", session)
 
 			// Render the harness screen, then HOLD it in the foreground with
 			// `sleep` so the shell never draws a prompt below the content. This
@@ -69,12 +126,25 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 			// never in the typed command echo.
 			payload := strings.Join(s.lines, `\n`) + `\n`
 			ready := "MUXRDY" + strconv.Itoa(i)
-			sendKeys(t, session, "clear")
-			sendKeys(t, session, "printf '"+payload+"'; echo \"MUXRDY\""+strconv.Itoa(i)+"; sleep 30")
-			if !waitFor(t, session, ready) {
+			sendKeys(e, session, "clear")
+			sendKeys(e, session, "printf '"+payload+"'; echo \"MUXRDY\""+strconv.Itoa(i)+"; sleep 30")
+			if !waitFor(e, session, ready) {
 				t.Fatalf("pane never showed readiness sentinel %q", ready)
 			}
 
+			// muxray's own Capture path, pointed at the private server through
+			// TMUX_TMPDIR (its run() shells out to bare `tmux`).
+			captureCmd := func(name string, args ...string) (stdout, stderr []byte, err error) {
+				cmd := exec.Command(name, args...)
+				cmd.Env = e.env()
+				var outb, errb strings.Builder
+				cmd.Stdout = &outb
+				cmd.Stderr = &errb
+				err = cmd.Run()
+				return []byte(outb.String()), []byte(errb.String()), err
+			}
+			origRun := tmux.SetRunCommand(captureCmd)
+			defer origRun()
 			raw, err := tmux.Capture(tmux.Target{Raw: session}, tmux.CaptureOpts{JoinWrapped: true})
 			if err != nil {
 				t.Fatalf("muxray Capture: %v", err)
@@ -89,19 +159,19 @@ func TestMockHarness_StateTransitions(t *testing.T) {
 	}
 }
 
-func sendKeys(t *testing.T, target, line string) {
-	t.Helper()
-	if out, err := exec.Command("tmux", "send-keys", "-t", target, line, "Enter").CombinedOutput(); err != nil {
-		t.Fatalf("send-keys %q: %v: %s", line, err, out)
+func sendKeys(e *harnessEnv, target, line string) {
+	e.t.Helper()
+	if out, err := e.tmux("send-keys", "-t", target, line, "Enter"); err != nil {
+		e.t.Fatalf("send-keys %q: %v: %s", line, err, out)
 	}
 }
 
-func waitFor(t *testing.T, target, want string) bool {
-	t.Helper()
+func waitFor(e *harnessEnv, target, want string) bool {
+	e.t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		out, err := exec.Command("tmux", "capture-pane", "-p", "-t", target).CombinedOutput()
-		if err == nil && strings.Contains(string(out), want) {
+		out, err := e.tmux("capture-pane", "-p", "-t", target)
+		if err == nil && strings.Contains(out, want) {
 			return true
 		}
 		time.Sleep(50 * time.Millisecond)

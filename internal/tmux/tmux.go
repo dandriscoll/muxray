@@ -50,6 +50,15 @@ var runCommand = func(name string, args ...string) (stdout, stderr []byte, err e
 	return out.Bytes(), errb.Bytes(), err
 }
 
+// SetRunCommand swaps the exec indirection (e.g. for a test that must point
+// muxray's capture at a private tmux server via env) and returns a restore
+// function. The swap is not goroutine-safe; use it around single calls.
+func SetRunCommand(fn func(name string, args ...string) ([]byte, []byte, error)) func() {
+	prev := runCommand
+	runCommand = fn
+	return func() { runCommand = prev }
+}
+
 // Available reports whether the tmux binary is on PATH.
 func Available() bool {
 	_, err := exec.LookPath("tmux")

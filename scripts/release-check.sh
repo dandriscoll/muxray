@@ -92,6 +92,38 @@ else
   err "build failed: $(cat "$tmpd/build.err")"
 fi
 
+# 5b) Checksums coverage: build into a scratch dir and assert checksums.txt
+#     names EVERY produced tarball and every hash verifies. An installer that
+#     verifies against a truncated checksums.txt fails at first use; this is
+#     the filed job-274 future-state guard. Offline (cross-compile only).
+check_checksums() {
+  local d="$1" t n_tar n_sum missing=0 badhash=0
+  n_tar=$(ls "$d"/*.tar.gz 2>/dev/null | wc -l)
+  # grep -c prints 0 itself on no match (exit 1); || true keeps set -e happy.
+  n_sum=$(grep -c '\.tar\.gz$' "$d/checksums.txt" 2>/dev/null || true)
+  [ "$n_tar" = "$n_sum" ] || { err "checksums.txt entries ($n_sum) != tarballs built ($n_tar)"; return; }
+  for t in "$d"/*.tar.gz; do
+    grep -qF "$(basename "$t")" "$d/checksums.txt" || { err "checksums.txt missing entry for $(basename "$t")"; missing=1; }
+  done
+  if [ "$missing" = 0 ]; then
+    ( cd "$d" && { command -v sha256sum >/dev/null 2>&1 && sha256sum -c --quiet checksums.txt \
+      || shasum -a 256 -c checksums.txt >/dev/null; } ) \
+      || { err "checksums.txt hashes do not verify against the built tarballs"; badhash=1; }
+  fi
+  [ "$badhash" = 0 ] && ok "checksums.txt covers every produced tarball (hashes verify)"
+}
+if command -v go >/dev/null 2>&1; then
+  ckd="$(mktemp -d)"
+  if MUXRAY_DIST="$ckd" "$ROOT/scripts/build-release.sh" "$VERSION" >/dev/null 2>&1; then
+    check_checksums "$ckd"
+  else
+    err "build-release.sh failed in scratch build (cannot verify checksums coverage)"
+  fi
+  rm -rf "$ckd"
+else
+  err "go not found — cannot verify checksums coverage"
+fi
+
 # 6) Online (post-tag) smoke — NOT part of the offline gate.
 if [ "$ONLINE" = 1 ]; then
   if ! command -v gh >/dev/null 2>&1; then

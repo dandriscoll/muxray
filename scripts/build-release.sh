@@ -12,7 +12,8 @@ DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 PKG="github.com/dandriscoll/muxray/internal/version"
 LDFLAGS="-s -w -X ${PKG}.Version=${VERSION} -X ${PKG}.Commit=${COMMIT} -X ${PKG}.Date=${DATE}"
 
-DIST="dist"
+# DIST is overridable so release-check.sh can build into a scratch dir.
+DIST="${MUXRAY_DIST:-dist}"
 rm -rf "$DIST"
 mkdir -p "$DIST"
 

@@ -13,15 +13,14 @@ func codexAdapter() adapter {
 			}
 			return 0
 		},
+		// Rule order is load-bearing (job 305, swept to siblings here):
+		// the live-working indicator (codex.running) must precede the
+		// content-phrase stopped-state rules (error/blocked), because Codex
+		// renders its todo/status panel inside the footer and a row like
+		// "… blocked by …" or "failed to …" can sit in a live, working pane.
+		// Interactive-pause rules stay first: a pane asking for approval or
+		// input has no live spinner, so they cannot shadow a running frame.
 		rules: []Rule{
-			phraseRule("codex.error", StatusError, 0.8,
-				"error:", "failed to", "stream error", "rate limit",
-				"request failed", "exception:",
-			),
-			phraseRule("codex.blocked", StatusBlocked, 0.8,
-				"blocked on", "blocked by", "cannot continue until",
-				"merge conflict", "sandbox denied",
-			),
 			phraseRule("codex.needs_approval", StatusNeedsApproval, 0.9,
 				"allow command", "run command?", "do you want to run",
 				"apply patch?", "allow this command", "approve",
@@ -34,6 +33,14 @@ func codexAdapter() adapter {
 			phraseRule("codex.running", StatusRunning, 0.88,
 				"esc to interrupt", "working", "thinking", "generating",
 				"running command", "applying patch",
+			),
+			phraseRule("codex.error", StatusError, 0.8,
+				"error:", "failed to", "stream error", "rate limit",
+				"request failed", "exception:",
+			),
+			phraseRule("codex.blocked", StatusBlocked, 0.8,
+				"blocked on", "blocked by", "cannot continue until",
+				"merge conflict", "sandbox denied",
 			),
 			phraseRule("codex.completed", StatusCompleted, 0.7,
 				"completed", "finished", "✔", "done",

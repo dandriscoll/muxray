@@ -13,14 +13,14 @@ func copilotAdapter() adapter {
 			}
 			return 0
 		},
+		// Rule order is load-bearing (job 305, swept to siblings here):
+		// the live-working indicator (copilot.running) must precede the
+		// content-phrase stopped-state rules (error/blocked), because Copilot
+		// can carry incidental "failed …" / "blocked by …" text in its status
+		// area while actively generating. Interactive-pause rules stay first:
+		// a pane asking for approval or input has no live spinner, so they
+		// cannot shadow a running frame.
 		rules: []Rule{
-			phraseRule("copilot.error", StatusError, 0.8,
-				"error:", "failed", "could not", "request failed",
-			),
-			phraseRule("copilot.blocked", StatusBlocked, 0.8,
-				"blocked on", "blocked by", "cannot continue until",
-				"merge conflict",
-			),
 			phraseRule("copilot.needs_approval", StatusNeedsApproval, 0.9,
 				"allow copilot to run", "run this command?",
 				"do you want to allow", "confirm", "[y/n]", "(y/n)",
@@ -32,6 +32,13 @@ func copilotAdapter() adapter {
 			phraseRule("copilot.running", StatusRunning, 0.85,
 				"esc to interrupt", "thinking", "generating", "working",
 				"loading suggestion",
+			),
+			phraseRule("copilot.error", StatusError, 0.8,
+				"error:", "failed", "could not", "request failed",
+			),
+			phraseRule("copilot.blocked", StatusBlocked, 0.8,
+				"blocked on", "blocked by", "cannot continue until",
+				"merge conflict",
 			),
 			phraseRule("copilot.completed", StatusCompleted, 0.7,
 				"completed", "done", "✓", "suggestion accepted",

@@ -205,6 +205,88 @@ func TestDetect_RunningBeatsInFooterStoppedPhrase(t *testing.T) {
 	}
 }
 
+// TestDetect_RunningBeatsInFooterStoppedPhrase_Siblings is the job-305 sweep
+// for the sibling adapters: the same inversion (a live, working pane carrying
+// an incidental "blocked by" / "failed to" row in its in-footer status panel)
+// must classify as running for Codex and Copilot too, not error/blocked.
+// Before the reorder these frames classified codex/error and copilot/error
+// respectively (reproduced red against the pre-fix rule order).
+func TestDetect_RunningBeatsInFooterStoppedPhrase_Siblings(t *testing.T) {
+	frames := []struct {
+		name        string
+		frame       string
+		wantProgram string
+		wantRule    string
+	}{
+		{
+			name: "codex",
+			frame: "OpenAI Codex\n" +
+				"  • Working (esc to interrupt)\n" +
+				"  Running command: go test ./...\n" +
+				"  ◻ #43 Cache the QR decoder locally (web scanner blocked by CSP)\n" +
+				"  ⎿  previous attempt failed to reach the service\n",
+			wantProgram: "codex",
+			wantRule:    "codex.running",
+		},
+		{
+			name: "copilot",
+			frame: "GitHub Copilot\n" +
+				"  Thinking…\n" +
+				"  Generating a suggestion (esc to interrupt)\n" +
+				"  ◻ #12 Retry policy (merge conflict in retry.go)\n" +
+				"  note: last build failed on two packages\n",
+			wantProgram: "copilot",
+			wantRule:    "copilot.running",
+		},
+	}
+	for _, f := range frames {
+		t.Run(f.name, func(t *testing.T) {
+			clean := normalize.Clean(f.frame, 200).Clean
+			res := program.Detect(clean, false)
+			if res.Program != f.wantProgram || res.Status != program.StatusRunning {
+				t.Fatalf("%s running frame with in-footer stopped phrases: got %s/%s, want %s/running\npane:\n%s",
+					f.name, res.Program, res.Status, f.wantProgram, clean)
+			}
+			if res.RuleID != f.wantRule {
+				t.Errorf("%s: got rule %q, want %s (live indicator must win over content-phrase stopped states)",
+					f.name, res.RuleID, f.wantRule)
+			}
+		})
+	}
+}
+
+// TestDetect_StoppedStatesStillDetectedAfterReorder guards the other side of
+// the job-305 sibling sweep: reordering running ahead of error/blocked must not
+// shadow a genuinely stopped pane. A stopped frame has no live spinner, so
+// running cannot match and the content-phrase rules still fire.
+func TestDetect_StoppedStatesStillDetectedAfterReorder(t *testing.T) {
+	cases := []struct {
+		name   string
+		frame  string
+		status program.Status
+		rule   string
+	}{
+		{"codex_error", "OpenAI Codex\n  stream error: rate limit exceeded (429)\n  failed to complete the request\n",
+			program.StatusError, "codex.error"},
+		{"codex_blocked", "OpenAI Codex\n  I can't continue: there is a merge conflict in internal/auth/user.go.\n  Resolve it, then tell me to proceed.\n",
+			program.StatusBlocked, "codex.blocked"},
+		{"copilot_error", "GitHub Copilot\n  error: could not reach the Copilot service\n  Request failed.\n",
+			program.StatusError, "copilot.error"},
+		{"copilot_blocked", "GitHub Copilot\n  Cannot continue until the merge conflict in retry.go is resolved.\n",
+			program.StatusBlocked, "copilot.blocked"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			clean := normalize.Clean(c.frame, 200).Clean
+			res := program.Detect(clean, false)
+			if res.Status != c.status || res.RuleID != c.rule {
+				t.Fatalf("stopped frame: got %s/%s (%s), want %s (%s)\npane:\n%s",
+					res.Program, res.Status, res.RuleID, c.status, c.rule, clean)
+			}
+		})
+	}
+}
+
 // TestDetect_ClaudeReadyPromptIsIdle is the regression for the chat-reported bug
 // (job 272): the CURRENT Claude Code ready prompt — a "✻ Cooked for …" rested
 // spinner, the "❯" input box, and the permission-mode footer

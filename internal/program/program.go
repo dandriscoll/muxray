@@ -246,6 +246,52 @@ func phraseRule(id string, status Status, conf float64, phrases ...string) Rule 
 	}
 }
 
+// todoGlyphs lead a row of an agent's todo or plan panel: pending, in
+// progress, done. Claude prefixes the first row with its ⎿ continuation mark.
+var todoGlyphs = []string{"◻", "◼", "✔", "☐", "☒"}
+
+// isTodoRow reports whether a line is a todo/plan panel row. A ⎿ line without
+// a checkbox is NOT one: Claude prints tool results and API errors that way.
+func isTodoRow(line string) bool {
+	t := strings.TrimLeft(line, " \t")
+	if rest, ok := strings.CutPrefix(t, "⎿"); ok {
+		t = strings.TrimLeft(rest, " \t")
+	}
+	for _, g := range todoGlyphs {
+		if strings.HasPrefix(t, g) {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutTodoRows drops todo/plan panel rows from a footer.
+func withoutTodoRows(text string) string {
+	lines := strings.Split(text, "\n")
+	kept := lines[:0:0]
+	for _, ln := range lines {
+		if !isTodoRow(ln) {
+			kept = append(kept, ln)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// contentPhraseRule is a phraseRule for a stopped state keyed on free-text
+// content ("blocked by", "error:", "could not"). It ignores todo/plan panel
+// rows, because an agent renders that panel inside its footer and a row's
+// title is a description of work, not the pane's state: an at-rest pane whose
+// todo list says "blocked by CSP" is idle, not blocked (issue #10).
+func contentPhraseRule(id string, status Status, conf float64, phrases ...string) Rule {
+	r := phraseRule(id, status, conf, phrases...)
+	inner := r.match
+	r.match = func(text, _ string) (bool, string) {
+		t := withoutTodoRows(text)
+		return inner(t, strings.ToLower(t))
+	}
+	return r
+}
+
 func lineContaining(text, needleLower string) string {
 	for _, ln := range strings.Split(text, "\n") {
 		if strings.Contains(strings.ToLower(ln), needleLower) {

@@ -398,3 +398,142 @@ func TestRuleSpecificity(t *testing.T) {
 		}
 	}
 }
+
+// TestDetect_IdleTodoRowIsNotState is issue #10 item 1: an AT-REST pane whose
+// todo/plan panel carries a row with a stopped-state phrase ("blocked by",
+// "error:", "could not") must classify as idle. The todo panel sits inside the
+// footer, so footer-bounding alone does not exclude it, and with no live
+// spinner the running rule cannot save it the way it does for a working pane.
+// A todo row is a line led by a checkbox glyph (◻ ◼ ✔ ☐ ☒), optionally after
+// Claude's ⎿ continuation mark. A ⎿ line WITHOUT a checkbox is not a todo row:
+// Claude prints its API errors that way, which the second half pins.
+func TestDetect_IdleTodoRowIsNotState(t *testing.T) {
+	frames := []struct {
+		name        string
+		frame       string
+		wantProgram string
+		wantRule    string
+	}{
+		{
+			name: "claude",
+			frame: "● Update Todos\n" +
+				"  ⎿  ✔ #41 Fix typecheck error: missing return (build break)\n" +
+				"     ◻ #43 Cache the QR decoder locally (web scanner blocked by CSP)\n" +
+				"     ☐ #44 Start the call harness with the mic muted\n" +
+				"\n" +
+				"────────────────────────────────────────────────────────────────────\n" +
+				"❯\n" +
+				"────────────────────────────────────────────────────────────────────\n" +
+				"  ⏵⏵ bypass permissions on (shift+tab to cycle) · ctrl+t to hide tasks\n",
+			wantProgram: "claude",
+			wantRule:    "claude.idle",
+		},
+		{
+			name: "codex",
+			frame: "OpenAI Codex  v1.0\n" +
+				"  ◻ #43 Cache the QR decoder locally (web scanner blocked by CSP)\n" +
+				"  ◼ #45 Handle error: timeout on retry\n" +
+				"\n" +
+				"  ›\n",
+			wantProgram: "codex",
+			wantRule:    "codex.idle",
+		},
+		{
+			name: "copilot",
+			frame: "GitHub Copilot\n" +
+				"  ☒ #12 Retry policy (merge conflict in retry.go)\n" +
+				"  ◻ #13 Report when the client could not reach the registry\n" +
+				"\n" +
+				"  copilot>\n",
+			wantProgram: "copilot",
+			wantRule:    "copilot.idle",
+		},
+	}
+	for _, f := range frames {
+		t.Run(f.name, func(t *testing.T) {
+			clean := normalize.Clean(f.frame, 200).Clean
+			res := program.Detect(clean, false)
+			if res.Program != f.wantProgram || res.Status != program.StatusIdle || res.RuleID != f.wantRule {
+				t.Fatalf("%s at-rest frame with a stopped-phrase todo row: got %s/%s (%s), want %s/idle (%s)\npane:\n%s",
+					f.name, res.Program, res.Status, res.RuleID, f.wantProgram, f.wantRule, clean)
+			}
+		})
+	}
+
+	// The same phrases OUTSIDE a todo row still mean what they say.
+	stopped := []struct {
+		name   string
+		frame  string
+		status program.Status
+		rule   string
+	}{
+		{"claude API error on a ⎿ line", "  ⎿ API Error: 500 Internal Server Error\n\n  ? for shortcuts\n",
+			program.StatusError, "claude.error"},
+		{"claude blocked in prose", "  ⏺ Claude\n  I'm blocked by a merge conflict in auth.go.\n\n  ? for shortcuts\n",
+			program.StatusBlocked, "claude.blocked"},
+		{"codex error line", "OpenAI Codex\n  error: failed to apply patch\n",
+			program.StatusError, "codex.error"},
+		{"copilot blocked line", "GitHub Copilot\n  Cannot continue until the lock is released.\n",
+			program.StatusBlocked, "copilot.blocked"},
+	}
+	for _, s := range stopped {
+		t.Run(s.name, func(t *testing.T) {
+			res := program.Detect(normalize.Clean(s.frame, 200).Clean, false)
+			if res.Status != s.status || res.RuleID != s.rule {
+				t.Fatalf("got %s/%s (%s), want %s (%s)", res.Program, res.Status, res.RuleID, s.status, s.rule)
+			}
+		})
+	}
+}
+
+// TestNoConflictingStateRules is issue #10 item 2, a design-time tripwire: for
+// every committed fixture, the live-working rule and a content-phrase stopped
+// rule (error, blocked) of the detected program must not BOTH match the
+// footer. Rule order decides which one is reported, but a co-fire means the
+// fixture carries text that makes the classification depend on that order,
+// which is the fixture-design smell this repo has been bitten by.
+func TestNoConflictingStateRules(t *testing.T) {
+	base := filepath.Join("testdata", "fixtures")
+	programs, err := os.ReadDir(base)
+	if err != nil {
+		t.Fatalf("read fixtures dir: %v", err)
+	}
+	checked, sawRunning := 0, 0
+	for _, prov := range programs {
+		if !prov.IsDir() {
+			continue
+		}
+		files, _ := os.ReadDir(filepath.Join(base, prov.Name()))
+		for _, f := range files {
+			if !strings.HasSuffix(f.Name(), ".txt") {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join(base, prov.Name(), f.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			res := program.Detect(normalize.Clean(string(raw), 200).Clean, true)
+			checked++
+			matched := map[program.Status][]string{}
+			for _, e := range res.Trace {
+				if e.Program == res.Program && e.Matched && e.RuleID != "signature" {
+					matched[e.Status] = append(matched[e.Status], e.RuleID)
+				}
+			}
+			if len(matched[program.StatusRunning]) == 0 {
+				continue
+			}
+			sawRunning++
+			for _, stop := range []program.Status{program.StatusError, program.StatusBlocked} {
+				if ids := matched[stop]; len(ids) > 0 {
+					t.Errorf("%s/%s: %v co-fires with %v on the same footer",
+						prov.Name(), f.Name(), matched[program.StatusRunning], ids)
+				}
+			}
+		}
+	}
+	// the sweep must have reached real frames, including live-working ones
+	if checked < 20 || sawRunning < 3 {
+		t.Fatalf("tripwire swept %d fixtures, %d with a running match; the corpus was not reached", checked, sawRunning)
+	}
+}

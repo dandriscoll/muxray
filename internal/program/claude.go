@@ -52,6 +52,11 @@ func claudeAdapter() adapter {
 			//      must not override a pane that is provably still working
 			//      (job 305 — the rw session reported running-as-blocked).
 			//
+			// Ordering cannot help an AT-REST pane (no spinner), so error/blocked
+			// are contentPhraseRules: they skip todo/plan panel rows (lines led by
+			// a checkbox glyph), and an idle pane whose todo list mentions
+			// "blocked by" stays idle (issue #10).
+			//
 			// error/blocked still fire correctly for a genuinely stopped pane: when
 			// the agent has errored or declared itself blocked, the spinner is gone,
 			// "esc to interrupt" is absent, running does not match, and these win.
@@ -68,11 +73,11 @@ func claudeAdapter() adapter {
 				"esc to interrupt", "cogitating", "pondering", "herding",
 				"thinking…", "working…", "tool use in progress",
 			),
-			phraseRule("claude.error", StatusError, 0.85,
+			contentPhraseRule("claude.error", StatusError, 0.85,
 				"api error", "execution error", "request failed",
 				"overloaded", "error:", "fatal:",
 			),
-			phraseRule("claude.blocked", StatusBlocked, 0.8,
+			contentPhraseRule("claude.blocked", StatusBlocked, 0.8,
 				"blocked on", "blocked by", "cannot continue until",
 				"waiting on lock", "merge conflict",
 			),
